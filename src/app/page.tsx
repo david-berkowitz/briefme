@@ -3,22 +3,22 @@ export default function Home() {
     <main>
       <header className="section">
         <div className="container flex flex-col gap-10">
-          <nav className="flex items-center justify-between">
+          <nav className="brand-nav flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
                 className="h-10 w-auto object-contain"
               />
-              <span className="text-lg font-semibold tracking-tight text-slate-700">
+              <span className="brand-title text-lg font-semibold tracking-tight">
                 BriefMe
               </span>
             </div>
-            <div className="flex items-center gap-6 text-sm font-medium">
+            <div className="flex items-center gap-3 text-sm font-semibold md:gap-6">
               <a href="#how">How it works</a>
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
-              <a href="/auth" className="rounded-full bg-ink px-5 py-2 text-white">Open app</a>
+              <a href="/auth" className="btn-primary px-5 py-2">Open app</a>
             </div>
           </nav>
           <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
@@ -28,14 +28,14 @@ export default function Home() {
               Track the voices that shape your narrative.
             </h1>
               <p className="text-lg text-slate-600 md:text-xl">
-                SignalRoom watches key people across LinkedIn and Bluesky and delivers daily briefs with client-ready takeaways.
+                BriefMe watches key people across LinkedIn and Bluesky and delivers daily briefs with client-ready takeaways.
                 No noise. Just what matters.
               </p>
               <div className="flex flex-wrap gap-4">
-                <a href="/auth" className="rounded-full bg-ember px-6 py-3 text-sm font-semibold text-white shadow-glow">
+                <a href="/auth" className="btn-primary px-6 py-3 text-sm">
                   Request early access
                 </a>
-                <a href="#demo" className="rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold">
+                <a href="#demo" className="btn-secondary px-6 py-3 text-sm">
                   See sample brief
                 </a>
               </div>
@@ -83,7 +83,7 @@ export default function Home() {
               Daily context without the chaos
             </h2>
             <p className="max-w-2xl text-slate-600">
-              SignalRoom turns influencer activity into clear, client-ready insights. Set watchlists, define client context, and get sharp takeaways every morning.
+              BriefMe turns influencer activity into clear, client-ready insights. Set watchlists, define client context, and get sharp takeaways every morning.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -221,7 +221,7 @@ export default function Home() {
                 <li>Unlimited client profiles</li>
                 <li>Exportable briefs</li>
               </ul>
-              <a href="/auth" className="block rounded-full bg-ink px-6 py-3 text-center text-sm font-semibold text-white">
+              <a href="/auth" className="btn-primary block px-6 py-3 text-center text-sm">
                 Join the waitlist
               </a>
             </div>
