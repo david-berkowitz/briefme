@@ -41,6 +41,7 @@ export default function WatchlistPage() {
   });
   const [sources, setSources] = useState<SourceInput[]>([newSource()]);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [nameLocked, setNameLocked] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -118,6 +119,7 @@ export default function WatchlistPage() {
     if (!canSave) return;
 
     setStatus("saving");
+    setErrorMessage("");
 
     const tags = form.tags
       .split(",")
@@ -141,6 +143,9 @@ export default function WatchlistPage() {
     });
 
     setStatus(error ? "error" : "saved");
+    if (error) {
+      setErrorMessage(error);
+    }
 
     if (!error) {
       setForm({ name: "", cadence: "daily", tags: "" });
@@ -246,7 +251,9 @@ export default function WatchlistPage() {
         </form>
 
         {status === "error" && (
-          <p className="text-sm text-rose-600">Could not save yet. Check Supabase config.</p>
+          <p className="text-sm text-rose-600">
+            Could not save yet: {errorMessage || "Check Supabase config."}
+          </p>
         )}
       </section>
 

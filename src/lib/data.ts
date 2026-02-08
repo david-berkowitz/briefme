@@ -67,6 +67,7 @@ export const insertWatchlistPerson = async (payload: {
     const { error: sourceError } = await db.from("watchlist_sources").insert(sourceRows);
 
     if (sourceError) {
+      await db.from("watchlist").delete().eq("id", data.id);
       return { error: sourceError.message };
     }
   }
