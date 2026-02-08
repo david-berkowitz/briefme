@@ -148,6 +148,92 @@ a {
   letter-spacing: -0.01em;
 }
 
+.voice-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.voice-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 44px rgba(18, 26, 47, 0.12);
+}
+
+.source-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.source-code {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.source-host {
+  margin-left: auto;
+  color: #6b7891;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-pill-linkedin {
+  background: #eef4ff;
+  border-color: #cddcf8;
+}
+
+.source-pill-linkedin .source-code {
+  background: #1f5bbf;
+  color: #fff;
+}
+
+.source-pill-bluesky {
+  background: #edf5ff;
+  border-color: #c8ddff;
+}
+
+.source-pill-bluesky .source-code {
+  background: #2f5eb8;
+  color: #fff;
+}
+
+.source-pill-instagram {
+  background: #fff1f5;
+  border-color: #ffd6e4;
+}
+
+.source-pill-instagram .source-code {
+  background: #c13584;
+  color: #fff;
+}
+
+.source-pill-threads {
+  background: #f2f2f2;
+  border-color: #dddddd;
+}
+
+.source-pill-threads .source-code {
+  background: #242424;
+  color: #fff;
+}
+
+.source-pill-other {
+  background: #f5f7fb;
+}
+
+.source-pill-other .source-code {
+  background: #7383a1;
+  color: #fff;
+}
+
 /* Compatibility classes used across existing pages */
 .bg-ink {
   background: var(--ink);

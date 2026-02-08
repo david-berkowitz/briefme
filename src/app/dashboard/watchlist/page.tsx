@@ -38,6 +38,41 @@ const newSource = () => ({
   source_url: ""
 });
 
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+const getSourceCode = (source: string) => {
+  const normalized = source.toLowerCase();
+  if (normalized === "linkedin") return "LI";
+  if (normalized === "bluesky") return "BS";
+  if (normalized === "instagram") return "IG";
+  if (normalized === "threads") return "TH";
+  return "OT";
+};
+
+const getSourceToneClass = (source: string) => {
+  const normalized = source.toLowerCase();
+  if (normalized === "linkedin") return "source-pill-linkedin";
+  if (normalized === "bluesky") return "source-pill-bluesky";
+  if (normalized === "instagram") return "source-pill-instagram";
+  if (normalized === "threads") return "source-pill-threads";
+  return "source-pill-other";
+};
+
+const getSourceLabel = (sourceUrl: string) => {
+  try {
+    const url = new URL(sourceUrl);
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return sourceUrl.length > 36 ? `${sourceUrl.slice(0, 36)}...` : sourceUrl;
+  }
+};
+
 export default function WatchlistPage() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -414,25 +449,29 @@ export default function WatchlistPage() {
               };
 
               return (
-                <div key={voice.id} className="card space-y-3">
+                <div key={voice.id} className="card voice-card space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-11 w-11 overflow-hidden rounded-full bg-slate-100">
                         {voice.avatar_url ? (
                           <img
                             src={voice.avatar_url}
                             alt={voice.name}
                             className="h-full w-full object-cover"
                           />
-                        ) : null}
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-500">
+                            {getInitials(voice.name)}
+                          </div>
+                        )}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold">{voice.name}</p>
+                        <p className="text-base font-semibold leading-tight">{voice.name}</p>
                         {voice.role && <p className="text-xs text-slate-500">{voice.role}</p>}
                       </div>
                     </div>
 
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    <span className="chip">
                       {voice.watchlist_sources?.length ?? 0} sources
                     </span>
                   </div>
@@ -448,9 +487,10 @@ export default function WatchlistPage() {
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                     <span>Cadence: {voice.cadence ?? "daily"}</span>
-                    <span>Priority: High</span>
+                    <span>•</span>
+                    <span>Updated profile tracking</span>
                   </div>
 
                   {isEditing ? (
@@ -567,23 +607,27 @@ export default function WatchlistPage() {
                   ) : (
                     <>
                       {voice.watchlist_sources?.length ? (
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        <div className="grid gap-2">
                           {voice.watchlist_sources.map((source) => (
-                            <span key={source.id} className="rounded-full border border-slate-200 px-3 py-1">
-                              {source.source}
-                            </span>
+                            <a
+                              key={source.id}
+                              href={source.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`source-pill ${getSourceToneClass(source.source)}`}
+                            >
+                              <span className="source-code">{getSourceCode(source.source)}</span>
+                              <span className="font-semibold">{source.source}</span>
+                              <span className="source-host">{getSourceLabel(source.source_url)}</span>
+                            </a>
                           ))}
                         </div>
                       ) : (
                         <p className="text-xs text-slate-400">No sources yet.</p>
                       )}
                       <div>
-                        <button
-                          type="button"
-                          onClick={() => startSourceEdit(voice)}
-                          className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
-                        >
-                          Edit sources
+                        <button type="button" onClick={() => startSourceEdit(voice)} className="btn-secondary px-3 py-1.5 text-xs">
+                          Edit profile
                         </button>
                       </div>
                     </>
