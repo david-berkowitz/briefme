@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchWatchlist, insertWatchlistPerson } from "@/lib/data";
+import {
+  deleteWatchlistSource,
+  fetchWatchlist,
+  insertWatchlistPerson,
+  insertWatchlistSource,
+  updateWatchlistSource
+} from "@/lib/data";
 
 type Voice = {
   id: string;
@@ -26,7 +32,7 @@ type SourceInput = {
 };
 
 const newSource = () => ({
-  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   source: "LinkedIn",
   source_url: ""
 });
@@ -44,6 +50,9 @@ export default function WatchlistPage() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [nameLocked, setNameLocked] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
+  const [sourceDrafts, setSourceDrafts] = useState<Record<string, SourceInput[]>>({});
+  const [sourceStatus, setSourceStatus] = useState<Record<string, string>>({});
 
   const canSave = useMemo(() => {
     const hasName = form.name.trim().length > 1;
@@ -110,8 +119,112 @@ export default function WatchlistPage() {
     setSources((prev) => prev.map((source) => (source.id === id ? { ...source, ...updates } : source)));
   };
 
+  const updateVoiceSourceDraft = (voiceId: string, sourceId: string, updates: Partial<SourceInput>) => {
+    setSourceDrafts((prev) => ({
+      ...prev,
+      [voiceId]: (prev[voiceId] ?? []).map((source) =>
+        source.id === sourceId ? { ...source, ...updates } : source
+      )
+    }));
+  };
+
   const addSourceRow = () => {
     setSources((prev) => [...prev, newSource()]);
+  };
+
+  const startSourceEdit = (voice: Voice) => {
+    const draftRows =
+      voice.watchlist_sources?.map((source) => ({
+        id: source.id,
+        source: source.source,
+        source_url: source.source_url,
+        handle: source.handle
+      })) ?? [];
+    setSourceDrafts((prev) => ({ ...prev, [voice.id]: draftRows.length ? draftRows : [newSource()] }));
+    setEditingVoiceId(voice.id);
+    setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
+  };
+
+  const addVoiceSourceDraft = (voiceId: string) => {
+    setSourceDrafts((prev) => ({ ...prev, [voiceId]: [...(prev[voiceId] ?? []), newSource()] }));
+  };
+
+  const removeVoiceSourceDraft = (voiceId: string, sourceId: string) => {
+    setSourceDrafts((prev) => ({
+      ...prev,
+      [voiceId]: (prev[voiceId] ?? []).filter((source) => source.id !== sourceId)
+    }));
+  };
+
+  const saveVoiceSources = async (voice: Voice) => {
+    const drafts = sourceDrafts[voice.id] ?? [];
+    setSourceStatus((prev) => ({ ...prev, [voice.id]: "Saving..." }));
+
+    const normalizedDrafts = drafts
+      .map((draft) => ({
+        ...draft,
+        source_url: draft.source_url.trim()
+      }))
+      .filter((draft) => draft.source_url.length > 3);
+
+    const originalById = new Map(voice.watchlist_sources.map((source) => [source.id, source]));
+    const keptOriginalIds = new Set(
+      normalizedDrafts.filter((draft) => !draft.id.startsWith("temp-")).map((draft) => draft.id)
+    );
+    const idsToDelete = voice.watchlist_sources
+      .filter((source) => !keptOriginalIds.has(source.id))
+      .map((source) => source.id);
+
+    for (const id of idsToDelete) {
+      const { error } = await deleteWatchlistSource(id);
+      if (error) {
+        setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not remove source: ${error}` }));
+        return;
+      }
+    }
+
+    for (const draft of normalizedDrafts) {
+      const detectedSource = detectSource(draft.source_url, draft.source);
+      const handle =
+        detectedSource === "Bluesky" ? normalizeBlueskyHandle(draft.source_url) ?? draft.handle ?? null : null;
+
+      if (draft.id.startsWith("temp-")) {
+        const { error } = await insertWatchlistSource({
+          watchlist_id: voice.id,
+          source: detectedSource,
+          source_url: draft.source_url,
+          handle
+        });
+        if (error) {
+          setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not add source: ${error}` }));
+          return;
+        }
+      } else {
+        const original = originalById.get(draft.id);
+        const unchanged =
+          original &&
+          original.source === detectedSource &&
+          original.source_url === draft.source_url &&
+          (original.handle ?? null) === (handle ?? null);
+
+        if (!unchanged) {
+          const { error } = await updateWatchlistSource({
+            id: draft.id,
+            source: detectedSource,
+            source_url: draft.source_url,
+            handle
+          });
+          if (error) {
+            setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not update source: ${error}` }));
+            return;
+          }
+        }
+      }
+    }
+
+    setSourceStatus((prev) => ({ ...prev, [voice.id]: "Saved." }));
+    setEditingVoiceId(null);
+    await load();
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -267,57 +380,162 @@ export default function WatchlistPage() {
           <p className="text-sm text-slate-500">Loading watchlist...</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {voices.map((voice) => (
-              <div key={voice.id} className="card space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-100">
-                      {voice.avatar_url ? (
-                        <img
-                          src={voice.avatar_url}
-                          alt={voice.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
+            {voices.map((voice) => {
+              const isEditing = editingVoiceId === voice.id;
+              const draftRows = sourceDrafts[voice.id] ?? [];
+
+              return (
+                <div key={voice.id} className="card space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-100">
+                        {voice.avatar_url ? (
+                          <img
+                            src={voice.avatar_url}
+                            alt={voice.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">{voice.name}</p>
+                        {voice.role && <p className="text-xs text-slate-500">{voice.role}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold">{voice.name}</p>
-                      {voice.role && <p className="text-xs text-slate-500">{voice.role}</p>}
-                    </div>
+
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      {voice.watchlist_sources?.length ?? 0} sources
+                    </span>
                   </div>
 
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {voice.watchlist_sources?.length ?? 0} sources
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(voice.tags ?? []).map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <span>Cadence: {voice.cadence ?? "daily"}</span>
-                  <span>Priority: High</span>
-                </div>
-
-                {voice.watchlist_sources?.length ? (
-                  <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                    {voice.watchlist_sources.map((source) => (
-                      <span key={source.id} className="rounded-full border border-slate-200 px-3 py-1">
-                        {source.source}
+                  <div className="flex flex-wrap gap-2">
+                    {(voice.tags ?? []).map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                      >
+                        {tag}
                       </span>
                     ))}
                   </div>
-                ) : null}
-              </div>
-            ))}
+
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <span>Cadence: {voice.cadence ?? "daily"}</span>
+                    <span>Priority: High</span>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="space-y-3 rounded-2xl border border-slate-200 p-3">
+                      {draftRows.map((source) => (
+                        <div key={source.id} className="grid gap-2 md:grid-cols-[1fr_130px_92px]">
+                          <input
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                            value={source.source_url}
+                            placeholder="Profile URL or handle"
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              const nextSource = detectSource(nextValue, source.source);
+                              updateVoiceSourceDraft(voice.id, source.id, {
+                                source_url: nextValue,
+                                source: nextSource
+                              });
+                            }}
+                            onBlur={(event) => {
+                              const nextSource = detectSource(event.target.value, source.source);
+                              if (nextSource === "Bluesky") {
+                                const handle = normalizeBlueskyHandle(event.target.value);
+                                if (handle) {
+                                  updateVoiceSourceDraft(voice.id, source.id, { handle });
+                                }
+                              }
+                            }}
+                          />
+                          <select
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                            value={source.source}
+                            onChange={(event) =>
+                              updateVoiceSourceDraft(voice.id, source.id, { source: event.target.value })
+                            }
+                          >
+                            <option>LinkedIn</option>
+                            <option>Bluesky</option>
+                            <option>Instagram</option>
+                            <option>Other</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => removeVoiceSourceDraft(voice.id, source.id)}
+                            className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => addVoiceSourceDraft(voice.id)}
+                          className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+                        >
+                          + Add source
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveVoiceSources(voice)}
+                          className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Save sources
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingVoiceId(null);
+                            setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
+                          }}
+                          className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      {sourceStatus[voice.id] ? (
+                        <p
+                          className={`text-xs ${
+                            sourceStatus[voice.id] === "Saved." ? "text-emerald-700" : "text-rose-600"
+                          }`}
+                        >
+                          {sourceStatus[voice.id]}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
+                      {voice.watchlist_sources?.length ? (
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                          {voice.watchlist_sources.map((source) => (
+                            <span key={source.id} className="rounded-full border border-slate-200 px-3 py-1">
+                              {source.source}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">No sources yet.</p>
+                      )}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => startSourceEdit(voice)}
+                          className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+                        >
+                          Edit sources
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

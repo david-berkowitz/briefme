@@ -90,6 +90,38 @@ export const insertWatchlistSource = async (payload: {
   return { error: error?.message ?? null };
 };
 
+export const updateWatchlistSource = async (payload: {
+  id: string;
+  source: string;
+  source_url: string;
+  handle?: string | null;
+}) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error } = await db
+    .from("watchlist_sources")
+    .update({
+      source: payload.source,
+      source_url: payload.source_url,
+      handle: payload.handle ?? null
+    })
+    .eq("id", payload.id);
+
+  return { error: error?.message ?? null };
+};
+
+export const deleteWatchlistSource = async (id: string) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error } = await db.from("watchlist_sources").delete().eq("id", id);
+
+  return { error: error?.message ?? null };
+};
+
 export const updateWatchlistAvatar = async (payload: {
   watchlist_id: string;
   avatar_url: string | null;
