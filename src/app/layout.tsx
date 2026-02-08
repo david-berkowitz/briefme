@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Fraunces, Manrope } from "next/font/google";
+import type { Metadata } from "next";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -11,9 +12,33 @@ const manrope = Manrope({
   variable: "--font-body"
 });
 
-export const metadata = {
-  title: "SignalRoom — Daily intelligence for modern comms",
-  description: "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways."
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://briefme-info.netlify.app";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "BriefMe | Daily intelligence for modern comms",
+    template: "%s | BriefMe"
+  },
+  description:
+    "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways.",
+  alternates: {
+    canonical: "/"
+  },
+  openGraph: {
+    title: "BriefMe | Daily intelligence for modern comms",
+    description:
+      "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways.",
+    url: siteUrl,
+    siteName: "BriefMe",
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BriefMe | Daily intelligence for modern comms",
+    description:
+      "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways."
+  }
 };
 
 export default function RootLayout({
