@@ -1,0 +1,65 @@
+import { NextResponse } from "next/server";
+import { getSupabaseServer } from "@/lib/supabaseServer";
+
+export const runtime = "nodejs";
+
+type LinkedInBody = {
+  watchlist_id?: string;
+  author_name?: string;
+  author_url?: string;
+  post_url?: string;
+  content?: string;
+  posted_at?: string | null;
+};
+
+export async function POST(request: Request) {
+  const secret = process.env.INGEST_SECRET;
+  const incoming = request.headers.get("x-ingest-secret");
+
+  if (!secret || incoming !== secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = getSupabaseServer();
+  const workspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID;
+
+  if (!supabase || !workspaceId) {
+    return NextResponse.json({ error: "Missing server config" }, { status: 500 });
+  }
+
+  const db = supabase as any;
+  const body = (await request.json()) as LinkedInBody;
+
+  let watchlistId = body.watchlist_id ?? null;
+  if (!watchlistId && body.author_url) {
+    const { data: sourceMatch } = await db
+      .from("watchlist_sources")
+      .select("watchlist_id")
+      .eq("source", "LinkedIn")
+      .eq("source_url", body.author_url)
+      .limit(1)
+      .single();
+
+    watchlistId = (sourceMatch as { watchlist_id?: string } | null)?.watchlist_id ?? null;
+  }
+
+  const { error } = await db.from("posts").upsert(
+    {
+      workspace_id: workspaceId,
+      watchlist_id: watchlistId,
+      source: "LinkedIn",
+      author_name: body.author_name,
+      author_url: body.author_url,
+      post_url: body.post_url,
+      content: body.content,
+      posted_at: body.posted_at ?? null
+    },
+    { onConflict: "post_url" }
+  );
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ inserted: 1 });
+}
