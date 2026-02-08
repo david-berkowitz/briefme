@@ -8,7 +8,7 @@ export default function Home() {
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-10 w-auto object-contain"
+                className="h-12 w-auto object-contain mix-blend-multiply md:h-14"
               />
               <span className="brand-title text-lg font-semibold tracking-tight">
                 BriefMe
@@ -236,7 +236,7 @@ export default function Home() {
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-8 w-auto object-contain"
+                className="h-10 w-auto object-contain mix-blend-multiply"
               />
               <p className="text-lg font-semibold">BriefMe</p>
             </div>

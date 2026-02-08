@@ -14,7 +14,7 @@ export default function DashboardLayout({
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-8 w-auto object-contain"
+                className="h-10 w-auto object-contain mix-blend-multiply"
               />
               <span className="brand-title">BriefMe</span>
             </Link>

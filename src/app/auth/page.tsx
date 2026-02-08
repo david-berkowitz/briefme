@@ -6,24 +6,32 @@ import { getSupabase } from "@/lib/supabaseClient";
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
   const supabase = getSupabase();
+  const redirectTarget =
+    typeof window === "undefined" ? "" : `${window.location.origin}/dashboard`;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!supabase) {
+      setErrorMessage("Supabase is not connected yet.");
       setStatus("error");
       return;
     }
 
     setStatus("loading");
+    setErrorMessage("");
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`
+        emailRedirectTo: redirectTarget
       }
     });
 
+    if (error) {
+      setErrorMessage(error.message);
+    }
     setStatus(error ? "error" : "sent");
   };
 
@@ -35,7 +43,7 @@ export default function AuthPage() {
             <img
               src="/briefme-logo.png"
               alt="BriefMe"
-              className="h-10 w-auto object-contain"
+              className="h-14 w-auto object-contain mix-blend-multiply md:h-16"
             />
             <span className="text-lg font-semibold text-slate-700">BriefMe</span>
           </div>
@@ -76,11 +84,27 @@ export default function AuthPage() {
             </button>
           </form>
           {status === "sent" && (
-            <p className="text-sm text-emerald-600">Check your inbox for the login link.</p>
+            <div className="space-y-2 text-sm text-emerald-700">
+              <p>Check your inbox for the login link.</p>
+              <p className="text-xs text-slate-500">Link target: {redirectTarget}</p>
+            </div>
           )}
           {status === "error" && (
-            <p className="text-sm text-rose-600">Something went wrong. Try again.</p>
+            <div className="space-y-2 text-sm text-rose-600">
+              <p>Could not send or use magic link: {errorMessage || "Something went wrong."}</p>
+              <p className="text-xs text-slate-500">
+                This is usually a Supabase URL setting issue, not Gmail linking.
+              </p>
+            </div>
           )}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <p className="font-semibold text-slate-700">If the email link says “site can’t be reached”:</p>
+            <p>1. Open Supabase → Authentication → URL Configuration.</p>
+            <p>2. Set Site URL to `https://briefme-info.netlify.app`.</p>
+            <p>3. Add redirect URLs:</p>
+            <p>`https://briefme-info.netlify.app/dashboard`</p>
+            <p>`http://localhost:3000/dashboard` (for local testing only)</p>
+          </div>
         </div>
       </div>
     </main>
