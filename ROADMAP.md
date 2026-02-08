@@ -14,6 +14,7 @@
 - Better duplicate handling and source quality checks.
 - Bulk import (paste many links/handles at once).
 - Client-level filters and saved views.
+- Inline edit/delete for voice profiles (name, tags, sources).
 
 ## Product value layer (next phase)
 - Automatic daily brief generation by client.
@@ -27,3 +28,10 @@
 - Cross-network identity suggestions (link likely profiles for same person).
 - Scheduled background ingestion jobs.
 - Monitoring, retry logic, and audit logs.
+
+## Source Expansion Plan
+- Phase 1 (already live): Bluesky + LinkedIn-notification-email pipeline.
+- Phase 2: Threads connector (official API path first; no unofficial scraping).
+- Phase 3: Instagram connector for professional accounts where API access is supported.
+- Add source health checks: auth state, rate-limit state, and last successful sync.
+- Add source-level toggles per person so users can pause specific channels.

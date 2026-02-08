@@ -6,6 +6,7 @@ import {
   fetchWatchlist,
   insertWatchlistPerson,
   insertWatchlistSource,
+  updateWatchlistPerson,
   updateWatchlistSource
 } from "@/lib/data";
 
@@ -52,6 +53,7 @@ export default function WatchlistPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null);
   const [sourceDrafts, setSourceDrafts] = useState<Record<string, SourceInput[]>>({});
+  const [voiceDrafts, setVoiceDrafts] = useState<Record<string, { name: string; tagsText: string }>>({});
   const [sourceStatus, setSourceStatus] = useState<Record<string, string>>({});
 
   const canSave = useMemo(() => {
@@ -141,6 +143,13 @@ export default function WatchlistPage() {
         handle: source.handle
       })) ?? [];
     setSourceDrafts((prev) => ({ ...prev, [voice.id]: draftRows.length ? draftRows : [newSource()] }));
+    setVoiceDrafts((prev) => ({
+      ...prev,
+      [voice.id]: {
+        name: voice.name,
+        tagsText: (voice.tags ?? []).join(", ")
+      }
+    }));
     setEditingVoiceId(voice.id);
     setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
   };
@@ -158,7 +167,23 @@ export default function WatchlistPage() {
 
   const saveVoiceSources = async (voice: Voice) => {
     const drafts = sourceDrafts[voice.id] ?? [];
+    const voiceDraft = voiceDrafts[voice.id] ?? { name: voice.name, tagsText: (voice.tags ?? []).join(", ") };
     setSourceStatus((prev) => ({ ...prev, [voice.id]: "Saving..." }));
+
+    const parsedTags = voiceDraft.tagsText
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    const { error: personError } = await updateWatchlistPerson({
+      id: voice.id,
+      name: voiceDraft.name.trim() || voice.name,
+      cadence: voice.cadence ?? "daily",
+      tags: parsedTags
+    });
+    if (personError) {
+      setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not update profile: ${personError}` }));
+      return;
+    }
 
     const normalizedDrafts = drafts
       .map((draft) => ({
@@ -383,6 +408,10 @@ export default function WatchlistPage() {
             {voices.map((voice) => {
               const isEditing = editingVoiceId === voice.id;
               const draftRows = sourceDrafts[voice.id] ?? [];
+              const voiceDraft = voiceDrafts[voice.id] ?? {
+                name: voice.name,
+                tagsText: (voice.tags ?? []).join(", ")
+              };
 
               return (
                 <div key={voice.id} className="card space-y-3">
@@ -426,6 +455,31 @@ export default function WatchlistPage() {
 
                   {isEditing ? (
                     <div className="space-y-3 rounded-2xl border border-slate-200 p-3">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <input
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          value={voiceDraft.name}
+                          placeholder="Full name"
+                          onChange={(event) =>
+                            setVoiceDrafts((prev) => ({
+                              ...prev,
+                              [voice.id]: { ...voiceDraft, name: event.target.value }
+                            }))
+                          }
+                        />
+                        <input
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          value={voiceDraft.tagsText}
+                          placeholder="Tags (comma separated)"
+                          onChange={(event) =>
+                            setVoiceDrafts((prev) => ({
+                              ...prev,
+                              [voice.id]: { ...voiceDraft, tagsText: event.target.value }
+                            }))
+                          }
+                        />
+                      </div>
+
                       {draftRows.map((source) => (
                         <div key={source.id} className="grid gap-2 md:grid-cols-[1fr_130px_92px]">
                           <input
@@ -491,6 +545,7 @@ export default function WatchlistPage() {
                           type="button"
                           onClick={() => {
                             setEditingVoiceId(null);
+                            setVoiceDrafts((prev) => ({ ...prev, [voice.id]: { name: voice.name, tagsText: (voice.tags ?? []).join(", ") } }));
                             setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
                           }}
                           className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"

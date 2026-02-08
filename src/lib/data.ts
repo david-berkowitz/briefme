@@ -174,6 +174,28 @@ export const insertClient = async (payload: {
   return { error: error?.message ?? null };
 };
 
+export const updateWatchlistPerson = async (payload: {
+  id: string;
+  name: string;
+  cadence?: string;
+  tags?: string[];
+}) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error } = await db
+    .from("watchlist")
+    .update({
+      name: payload.name,
+      cadence: payload.cadence ?? "daily",
+      tags: payload.tags ?? []
+    })
+    .eq("id", payload.id);
+
+  return { error: error?.message ?? null };
+};
+
 export const fetchDashboardStats = async () => {
   const supabase = getSupabase();
   const workspaceId = getWorkspaceId();
