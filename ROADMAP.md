@@ -7,6 +7,9 @@
 - Daily/weekly cadence controls and free-form tagging.
 - Magic-link sign in.
 - Landing page + dashboard ready for external testing.
+- Per-user private workspace auto-creation on first login.
+- Client-specific brief generation from recent tracked posts.
+- New-user onboarding checklist in dashboard.
 
 ## Near-term improvements (2-4 weeks)
 - Gmail ingestion for LinkedIn notification emails.

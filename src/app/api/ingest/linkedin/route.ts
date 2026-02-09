@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 
 type LinkedInBody = {
+  workspace_id?: string;
   watchlist_id?: string;
   author_name?: string;
   author_url?: string;
@@ -21,14 +22,14 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseServer();
-  const workspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID;
+  const body = (await request.json()) as LinkedInBody;
+  const workspaceId = body.workspace_id ?? null;
 
   if (!supabase || !workspaceId) {
-    return NextResponse.json({ error: "Missing server config" }, { status: 500 });
+    return NextResponse.json({ error: "Missing workspace id or server config" }, { status: 400 });
   }
 
   const db = supabase as any;
-  const body = (await request.json()) as LinkedInBody;
 
   let watchlistId = body.watchlist_id ?? null;
   if (!watchlistId && body.author_url) {

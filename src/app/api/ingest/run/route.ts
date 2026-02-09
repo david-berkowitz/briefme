@@ -10,21 +10,20 @@ type SourceRow = {
   watchlist: { name: string | null; avatar_url: string | null } | null;
 };
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = getSupabaseServer();
-  const workspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID;
+  const body = (await request.json().catch(() => ({}))) as { workspaceId?: string };
+  const workspaceId = body.workspaceId ?? null;
 
   if (!supabase || !workspaceId) {
-    return NextResponse.json({ error: "Missing server config" }, { status: 500 });
+    return NextResponse.json({ error: "Missing workspace id or server config" }, { status: 400 });
   }
 
   const db = supabase as any;
 
   const { data } = await db
     .from("watchlist_sources")
-    .select(
-      "id,source_url,watchlist_id,watchlist!inner(id,workspace_id,name,avatar_url)"
-    )
+    .select("id,source_url,watchlist_id,watchlist!inner(id,workspace_id,name,avatar_url)")
     .eq("source", "Bluesky")
     .eq("watchlist.workspace_id", workspaceId);
 

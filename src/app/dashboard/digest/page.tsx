@@ -1,77 +1,128 @@
-const highlights = [
-  {
-    title: "Regulators emphasize audit-ready AI systems",
-    source: "LinkedIn · Dr. Maya Patel",
-    takeaway: "Reinforce Aurora Fintech's audit playbook and publish a transparency checklist."
-  },
-  {
-    title: "Bluesky thread on faster onboarding for SMBs",
-    source: "Bluesky · Jordan Ruiz",
-    takeaway: "Pitch PulsePay's onboarding story with a 60-second demo video."
-  },
-  {
-    title: "Reporter asks for examples of privacy-first health tech",
-    source: "LinkedIn · Evelyn Sharp",
-    takeaway: "Offer Nova Health as a case study, with metrics on consent rates."
-  }
-];
+"use client";
+
+import { useEffect, useState } from "react";
+import { fetchDigests, generateClientBriefs } from "@/lib/data";
+
+type Digest = {
+  id: string;
+  title: string;
+  summary: string | null;
+  created_at: string;
+};
+
+type BriefPreview = {
+  clientId: string;
+  clientName: string;
+  summary: string;
+};
 
 export default function DigestPage() {
+  const [digests, setDigests] = useState<Digest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<BriefPreview[]>([]);
+
+  const load = async () => {
+    setLoading(true);
+    const data = await fetchDigests();
+    setDigests(data as Digest[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setStatusMessage(null);
+
+    const result = await generateClientBriefs();
+    if (result.error) {
+      setStatusMessage(result.error);
+    } else {
+      setStatusMessage(`Generated ${result.created} client brief${result.created === 1 ? "" : "s"}.`);
+      setPreviews(
+        result.briefs.map((brief) => ({
+          clientId: brief.clientId,
+          clientName: brief.clientName,
+          summary: brief.summary
+        }))
+      );
+      await load();
+    }
+
+    setGenerating(false);
+  };
+
   return (
     <div className="space-y-8">
       <section className="card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Daily digest</p>
-            <h2 className="text-xl font-semibold">Wednesday briefing</h2>
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Client briefing</p>
+            <h2 className="text-xl font-semibold">Generate customized briefs</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Uses each client&apos;s positioning, narratives, and risks to rank recent posts and suggest takeaways.
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold">
-              Export PDF
-            </button>
-            <button className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white">
-              Email team
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating}
+            className="btn-primary px-4 py-2 text-sm"
+          >
+            {generating ? "Generating..." : "Generate today’s briefs"}
+          </button>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Coverage</p>
-            <p className="mt-2 text-2xl font-semibold">12 posts</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Clients</p>
-            <p className="mt-2 text-2xl font-semibold">3 active</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Response needed</p>
-            <p className="mt-2 text-2xl font-semibold">2 high</p>
-          </div>
-        </div>
+
+        {statusMessage && (
+          <p className={`text-sm ${statusMessage.startsWith("Generated") ? "text-emerald-700" : "text-rose-600"}`}>
+            {statusMessage}
+          </p>
+        )}
       </section>
 
+      {previews.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-lg font-semibold">Freshly generated previews</h3>
+          <div className="space-y-3">
+            {previews.map((preview) => (
+              <article key={preview.clientId} className="card space-y-2">
+                <p className="text-sm font-semibold">{preview.clientName}</p>
+                <p className="whitespace-pre-line text-sm text-slate-600">{preview.summary}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold">Client-ready takeaways</h3>
-        <div className="space-y-4">
-          {highlights.map((item) => (
-            <div key={item.title} className="card space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>{item.source}</span>
-                <span>Priority: High</span>
-              </div>
-              <p className="text-base font-semibold text-slate-900">{item.title}</p>
-              <p className="text-sm text-slate-600">{item.takeaway}</p>
-              <div className="flex flex-wrap gap-3">
-                <button className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold">
-                  Draft response
-                </button>
-                <button className="rounded-full bg-ember px-4 py-2 text-xs font-semibold text-white">
-                  Share with client
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Saved digest history</h3>
+          <p className="text-sm text-slate-500">{digests.length} recent</p>
         </div>
+
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading digests...</p>
+        ) : digests.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No digests saved yet. Click “Generate today’s briefs” to create your first customized client summaries.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {digests.map((digest) => (
+              <article key={digest.id} className="card space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">{digest.title}</p>
+                  <p className="text-xs text-slate-500">{new Date(digest.created_at).toLocaleString()}</p>
+                </div>
+                <p className="whitespace-pre-line text-sm text-slate-600">{digest.summary ?? "No summary stored."}</p>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

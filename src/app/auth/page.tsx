@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -21,6 +23,12 @@ export default function AuthPage() {
 
     setStatus("loading");
     setErrorMessage("");
+
+    const existing = await supabase.auth.getUser();
+    if (existing.data.user) {
+      router.replace("/dashboard");
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -53,6 +61,9 @@ export default function AuthPage() {
           </h1>
           <p className="text-slate-600">
             Get daily digests, client takeaways, and your personalized watchlist delivered straight to your inbox.
+          </p>
+          <p className="text-sm text-slate-500">
+            New users are welcome. We create a private workspace for each login automatically.
           </p>
           {!supabase && (
             <p className="text-sm text-amber-600">

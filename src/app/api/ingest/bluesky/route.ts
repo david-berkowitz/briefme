@@ -19,10 +19,11 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseServer();
-  const workspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID;
+  const body = (await request.json().catch(() => ({}))) as { workspaceId?: string };
+  const workspaceId = body.workspaceId ?? null;
 
   if (!supabase || !workspaceId) {
-    return NextResponse.json({ error: "Missing server config" }, { status: 500 });
+    return NextResponse.json({ error: "Missing workspace id or server config" }, { status: 400 });
   }
 
   const db = supabase as any;

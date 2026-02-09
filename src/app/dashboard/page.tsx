@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchDashboardStats, fetchRecentPosts } from "@/lib/data";
+import { fetchDashboardStats, fetchRecentPosts, runBlueskyIngestForWorkspace } from "@/lib/data";
 
 type Stats = {
   voices: number;
   clients: number;
   digests: number;
+  workspaceReady: boolean;
 };
 
 type Post = {
@@ -21,7 +22,12 @@ type Post = {
 };
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats>({ voices: 0, clients: 0, digests: 0 });
+  const [stats, setStats] = useState<Stats>({
+    voices: 0,
+    clients: 0,
+    digests: 0,
+    workspaceReady: false
+  });
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -51,18 +57,11 @@ export default function DashboardPage() {
     setIngesting(true);
     setIngestMessage(null);
 
-    try {
-      const response = await fetch("/api/ingest/run", { method: "POST" });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        setIngestMessage(payload?.error ?? "Refresh failed.");
-      } else {
-        const inserted = Number(payload?.inserted ?? 0);
-        setIngestMessage(`Refresh complete. ${inserted} posts processed.`);
-      }
-    } catch {
-      setIngestMessage("Refresh failed.");
+    const result = await runBlueskyIngestForWorkspace();
+    if (result.error) {
+      setIngestMessage(result.error);
+    } else {
+      setIngestMessage(`Refresh complete. ${result.inserted} posts processed.`);
     }
 
     await loadPosts();
@@ -85,6 +84,27 @@ export default function DashboardPage() {
           </div>
         ))}
       </section>
+
+      {!stats.workspaceReady && (
+        <section className="card">
+          <p className="text-sm text-slate-600">
+            Finishing account setup. Refresh the page in a moment if numbers do not appear yet.
+          </p>
+        </section>
+      )}
+
+      {stats.workspaceReady && stats.voices === 0 && stats.clients === 0 && (
+        <section className="card space-y-3">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Getting started</p>
+          <h2 className="text-lg font-semibold">New account checklist</h2>
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
+            <li>Add 5-10 voices in Watchlist.</li>
+            <li>Add at least one client in Clients with narratives and risks.</li>
+            <li>Click “Refresh posts now” to pull the latest activity.</li>
+            <li>Open Daily Digest and click “Generate today’s briefs”.</li>
+          </ol>
+        </section>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="card space-y-6">

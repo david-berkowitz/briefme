@@ -1,15 +1,176 @@
 import { getSupabase } from "@/lib/supabaseClient";
 
-type WorkspaceId = string | null;
+type ResolveWorkspaceResult = {
+  workspaceId: string | null;
+  userId: string | null;
+  error: string | null;
+};
 
-const getWorkspaceId = (): WorkspaceId => {
-  return process.env.NEXT_PUBLIC_WORKSPACE_ID ?? null;
+type BriefHighlight = {
+  authorName: string;
+  source: string;
+  content: string;
+  postedAt: string | null;
+  score: number;
+};
+
+type ClientBrief = {
+  clientId: string;
+  clientName: string;
+  summary: string;
+  highlights: BriefHighlight[];
+};
+
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "your",
+  "about",
+  "into",
+  "have",
+  "will",
+  "just",
+  "when",
+  "they",
+  "them",
+  "their",
+  "what",
+  "where",
+  "were",
+  "been",
+  "also",
+  "than",
+  "then",
+  "you",
+  "our",
+  "are",
+  "not",
+  "but",
+  "can",
+  "all",
+  "one",
+  "two",
+  "new",
+  "how"
+]);
+
+let cachedWorkspaceId: string | null = null;
+let cachedUserId: string | null = null;
+
+const tokenize = (value: string | null | undefined) => {
+  if (!value) return [];
+
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 3 && !STOPWORDS.has(token));
+};
+
+const scorePost = (content: string | null, keywords: Set<string>, postedAt: string | null) => {
+  if (!content) return 0;
+
+  const tokens = tokenize(content);
+  const overlap = tokens.reduce((count, token) => (keywords.has(token) ? count + 1 : count), 0);
+
+  let recencyBoost = 0;
+  if (postedAt) {
+    const ageMs = Date.now() - new Date(postedAt).getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (ageMs <= dayMs) recencyBoost = 2;
+    else if (ageMs <= 3 * dayMs) recencyBoost = 1;
+  }
+
+  return overlap + recencyBoost;
+};
+
+export const clearWorkspaceCache = () => {
+  cachedWorkspaceId = null;
+  cachedUserId = null;
+};
+
+export const fetchSessionUser = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return { user: null, error: "Missing Supabase config." };
+
+  const { data, error } = await supabase.auth.getUser();
+  return { user: data.user ?? null, error: error?.message ?? null };
+};
+
+export const resolveWorkspace = async (): Promise<ResolveWorkspaceResult> => {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { workspaceId: null, userId: null, error: "Missing Supabase config." };
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const user = authData.user;
+
+  if (authError || !user) {
+    clearWorkspaceCache();
+    return { workspaceId: null, userId: null, error: authError?.message ?? "Please sign in." };
+  }
+
+  if (cachedWorkspaceId && cachedUserId === user.id) {
+    return { workspaceId: cachedWorkspaceId, userId: user.id, error: null };
+  }
+
+  const db = supabase as any;
+  const { data: existing, error: existingError } = await db
+    .from("workspaces")
+    .select("id")
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (existingError) {
+    return { workspaceId: null, userId: user.id, error: existingError.message };
+  }
+
+  if (existing?.id) {
+    cachedWorkspaceId = existing.id;
+    cachedUserId = user.id;
+    return { workspaceId: existing.id, userId: user.id, error: null };
+  }
+
+  const workspaceName =
+    user.user_metadata?.full_name && String(user.user_metadata.full_name).trim().length > 0
+      ? `${String(user.user_metadata.full_name).trim()}'s Workspace`
+      : "My Workspace";
+
+  const { data: created, error: createError } = await db
+    .from("workspaces")
+    .insert({
+      owner_user_id: user.id,
+      owner_email: user.email ?? "unknown@briefme.local",
+      name: workspaceName
+    })
+    .select("id")
+    .single();
+
+  if (createError || !created?.id) {
+    return {
+      workspaceId: null,
+      userId: user.id,
+      error: createError?.message ?? "Could not create workspace."
+    };
+  }
+
+  cachedWorkspaceId = created.id;
+  cachedUserId = user.id;
+  return { workspaceId: created.id, userId: user.id, error: null };
 };
 
 export const fetchWatchlist = async () => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) return [];
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
 
   const db = supabase as any;
   const { data } = await db
@@ -32,9 +193,13 @@ export const insertWatchlistPerson = async (payload: {
   sources: Array<{ source: string; source_url: string; handle?: string | null }>;
 }) => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) {
+  if (!supabase) {
     return { error: "Missing Supabase config." };
+  }
+
+  const { workspaceId, error: workspaceError } = await resolveWorkspace();
+  if (!workspaceId) {
+    return { error: workspaceError ?? "Missing workspace." };
   }
 
   const db = supabase as any;
@@ -140,8 +305,10 @@ export const updateWatchlistAvatar = async (payload: {
 
 export const fetchClients = async () => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) return [];
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
 
   const db = supabase as any;
   const { data } = await db
@@ -160,9 +327,13 @@ export const insertClient = async (payload: {
   risks?: string;
 }) => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) {
+  if (!supabase) {
     return { error: "Missing Supabase config." };
+  }
+
+  const { workspaceId, error: workspaceError } = await resolveWorkspace();
+  if (!workspaceId) {
+    return { error: workspaceError ?? "Missing workspace." };
   }
 
   const db = supabase as any;
@@ -198,9 +369,13 @@ export const updateWatchlistPerson = async (payload: {
 
 export const fetchDashboardStats = async () => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) {
-    return { voices: 0, clients: 0, digests: 0 };
+  if (!supabase) {
+    return { voices: 0, clients: 0, digests: 0, workspaceReady: false };
+  }
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) {
+    return { voices: 0, clients: 0, digests: 0, workspaceReady: false };
   }
 
   const db = supabase as any;
@@ -213,14 +388,17 @@ export const fetchDashboardStats = async () => {
   return {
     voices: voicesRes.count ?? 0,
     clients: clientsRes.count ?? 0,
-    digests: digestsRes.count ?? 0
+    digests: digestsRes.count ?? 0,
+    workspaceReady: true
   };
 };
 
 export const fetchRecentPosts = async () => {
   const supabase = getSupabase();
-  const workspaceId = getWorkspaceId();
-  if (!supabase || !workspaceId) return [];
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
 
   const db = supabase as any;
   const { data } = await db
@@ -228,7 +406,173 @@ export const fetchRecentPosts = async () => {
     .select("id,source,author_name,author_url,post_url,content,posted_at,created_at")
     .eq("workspace_id", workspaceId)
     .order("posted_at", { ascending: false })
-    .limit(10);
+    .limit(20);
 
   return data ?? [];
+};
+
+export const fetchDigests = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
+
+  const db = supabase as any;
+  const { data } = await db
+    .from("digests")
+    .select("id,title,summary,created_at")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  return data ?? [];
+};
+
+export const runBlueskyIngestForWorkspace = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return { inserted: 0, checked: 0, error: "Missing Supabase config." };
+
+  const { workspaceId, error: workspaceError } = await resolveWorkspace();
+  if (!workspaceId) return { inserted: 0, checked: 0, error: workspaceError ?? "Missing workspace." };
+
+  try {
+    const response = await fetch("/api/ingest/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId })
+    });
+
+    const payload = (await response.json()) as { inserted?: number; checked?: number; error?: string };
+
+    if (!response.ok) {
+      return {
+        inserted: 0,
+        checked: 0,
+        error: payload.error ?? "Refresh failed."
+      };
+    }
+
+    return {
+      inserted: Number(payload.inserted ?? 0),
+      checked: Number(payload.checked ?? 0),
+      error: null
+    };
+  } catch {
+    return { inserted: 0, checked: 0, error: "Refresh failed." };
+  }
+};
+
+const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
+  const top = highlights.slice(0, 3);
+
+  if (top.length === 0) {
+    return `No strong matches found for ${client.name} today. Recommended move: monitor and wait for stronger signal overlap with your narratives.`;
+  }
+
+  const lines = top.map((item, index) => {
+    const cleaned = (item.content ?? "").replace(/\s+/g, " ").trim();
+    const short = cleaned.length > 180 ? `${cleaned.slice(0, 180)}...` : cleaned;
+    return `${index + 1}. ${item.authorName} (${item.source}): ${short}`;
+  });
+
+  const strategyFocus = [client.positioning, client.narratives, client.risks].filter(Boolean).join(" | ");
+
+  return [
+    `Client focus: ${client.name}`,
+    strategyFocus ? `Context: ${strategyFocus}` : "Context: No custom context added yet.",
+    "Top matched signals:",
+    ...lines,
+    "Recommended move: publish a short POV response tied to your strongest differentiator and one proof point."
+  ].join("\n");
+};
+
+export const generateClientBriefs = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config.", created: 0, briefs: [] as ClientBrief[] };
+
+  const { workspaceId, error: workspaceError } = await resolveWorkspace();
+  if (!workspaceId) {
+    return {
+      error: workspaceError ?? "Missing workspace.",
+      created: 0,
+      briefs: [] as ClientBrief[]
+    };
+  }
+
+  const db = supabase as any;
+
+  const [{ data: clients }, { data: posts }] = await Promise.all([
+    db
+      .from("clients")
+      .select("id,name,positioning,narratives,risks")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false }),
+    db
+      .from("posts")
+      .select("id,source,author_name,content,posted_at")
+      .eq("workspace_id", workspaceId)
+      .order("posted_at", { ascending: false })
+      .limit(80)
+  ]);
+
+  const clientRows = clients ?? [];
+  const postRows = posts ?? [];
+
+  if (clientRows.length === 0) {
+    return { error: "Add at least one client first.", created: 0, briefs: [] as ClientBrief[] };
+  }
+
+  const briefs: ClientBrief[] = clientRows.map((client: any) => {
+    const contextText = [client.positioning, client.narratives, client.risks].filter(Boolean).join(" ");
+    const keywords = new Set(tokenize(contextText));
+
+    const scored = postRows
+      .map((post: any) => {
+        const score = scorePost(post.content, keywords, post.posted_at);
+        return {
+          authorName: post.author_name,
+          source: post.source,
+          content: post.content ?? "",
+          postedAt: post.posted_at,
+          score
+        } as BriefHighlight;
+      })
+      .filter((post: BriefHighlight) => post.score > 0)
+      .sort((a: BriefHighlight, b: BriefHighlight) => b.score - a.score);
+
+    const fallback =
+      scored.length === 0
+        ? postRows.slice(0, 3).map((post: any) => ({
+            authorName: post.author_name,
+            source: post.source,
+            content: post.content ?? "",
+            postedAt: post.posted_at,
+            score: 0
+          }))
+        : [];
+
+    const highlights = (scored.length ? scored : fallback).slice(0, 3);
+
+    return {
+      clientId: client.id,
+      clientName: client.name,
+      highlights,
+      summary: composeBriefSummary(client, highlights)
+    };
+  });
+
+  const nowLabel = new Date().toLocaleDateString();
+  const inserts = briefs.map((brief) => ({
+    workspace_id: workspaceId,
+    title: `${brief.clientName} brief · ${nowLabel}`,
+    summary: brief.summary
+  }));
+
+  const { error } = await db.from("digests").insert(inserts);
+  if (error) {
+    return { error: error.message, created: 0, briefs };
+  }
+
+  return { error: null, created: inserts.length, briefs };
 };
