@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Fraunces, Manrope } from "next/font/google";
 import type { Metadata } from "next";
+import AuthHashHandler from "./AuthHashHandler";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -48,7 +49,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AuthHashHandler />
+        {children}
+      </body>
     </html>
   );
 }
