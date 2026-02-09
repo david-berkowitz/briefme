@@ -9,6 +9,15 @@ create table public.workspaces (
   unique (owner_user_id)
 );
 
+create table public.beta_signups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text not null,
+  workspace_id uuid references public.workspaces(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  unique (user_id)
+);
+
 create table public.clients (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade,
@@ -68,6 +77,7 @@ create unique index if not exists posts_post_url_unique
   where post_url is not null;
 
 alter table public.workspaces enable row level security;
+alter table public.beta_signups enable row level security;
 alter table public.clients enable row level security;
 alter table public.watchlist enable row level security;
 alter table public.watchlist_sources enable row level security;
@@ -85,6 +95,15 @@ for update using (owner_user_id = auth.uid()) with check (owner_user_id = auth.u
 
 create policy workspaces_delete_own on public.workspaces
 for delete using (owner_user_id = auth.uid());
+
+create policy beta_signups_select_own on public.beta_signups
+for select using (user_id = auth.uid());
+
+create policy beta_signups_insert_own on public.beta_signups
+for insert with check (user_id = auth.uid());
+
+create policy beta_signups_update_own on public.beta_signups
+for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 create policy clients_all_own on public.clients
 for all using (

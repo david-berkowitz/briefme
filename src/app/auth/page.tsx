@@ -12,6 +12,7 @@ export default function AuthPage() {
   const supabase = getSupabase();
   const redirectTarget =
     typeof window === "undefined" ? "" : `${window.location.origin}/dashboard`;
+  const upgradeEmail = "dberkowitz@gmail.com";
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -55,15 +56,23 @@ export default function AuthPage() {
             />
             <span className="text-lg font-semibold text-slate-700">BriefMe</span>
           </div>
-          <span className="badge">Welcome back</span>
+          <span className="badge">Beta access</span>
           <h1 className="text-4xl font-semibold md:text-5xl" style={{ fontFamily: "var(--font-display)" }}>
-            Sign in to your briefings
+            Join the BriefMe beta
           </h1>
           <p className="text-slate-600">
-            Get daily digests, client takeaways, and your personalized watchlist delivered straight to your inbox.
+            Start free and track up to 10 people. You can add multiple links per person (like LinkedIn + Bluesky)
+            inside one profile.
           </p>
           <p className="text-sm text-slate-500">
-            New users are welcome. We create a private workspace for each login automatically.
+            We create a private workspace for every login automatically.
+          </p>
+          <p className="text-sm text-slate-500">
+            Need a bigger limit?{" "}
+            <a className="font-semibold underline" href={`mailto:${upgradeEmail}?subject=BriefMe%20Upgrade%20Request`}>
+              Contact David for an upgrade
+            </a>
+            .
           </p>
           {!supabase && (
             <p className="text-sm text-amber-600">
@@ -108,14 +117,9 @@ export default function AuthPage() {
               </p>
             </div>
           )}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            <p className="font-semibold text-slate-700">If the email link says “site can’t be reached”:</p>
-            <p>1. Open Supabase → Authentication → URL Configuration.</p>
-            <p>2. Set Site URL to `https://briefme-info.netlify.app`.</p>
-            <p>3. Add redirect URLs:</p>
-            <p>`https://briefme-info.netlify.app/dashboard`</p>
-            <p>`http://localhost:3000/dashboard` (for local testing only)</p>
-          </div>
+          <p className="text-xs text-slate-500">
+            First time here? Use your email above and we’ll send your secure sign-in link.
+          </p>
         </div>
       </div>
     </main>

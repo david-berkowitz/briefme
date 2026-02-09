@@ -5,6 +5,7 @@ type ResolveWorkspaceResult = {
   userId: string | null;
   error: string | null;
 };
+const VOICE_LIMIT = 10;
 
 type BriefHighlight = {
   authorName: string;
@@ -162,6 +163,16 @@ export const resolveWorkspace = async (): Promise<ResolveWorkspaceResult> => {
 
   cachedWorkspaceId = created.id;
   cachedUserId = user.id;
+
+  await db.from("beta_signups").upsert(
+    {
+      user_id: user.id,
+      email: user.email ?? "unknown@briefme.local",
+      workspace_id: created.id
+    },
+    { onConflict: "user_id" }
+  );
+
   return { workspaceId: created.id, userId: user.id, error: null };
 };
 
@@ -203,6 +214,16 @@ export const insertWatchlistPerson = async (payload: {
   }
 
   const db = supabase as any;
+  const { count: existingCount } = await db
+    .from("watchlist")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+
+  if ((existingCount ?? 0) >= VOICE_LIMIT) {
+    return {
+      error: `You are on the beta limit of ${VOICE_LIMIT} people. Remove one or request an upgrade.`
+    };
+  }
 
   const { data, error } = await db
     .from("watchlist")
@@ -238,6 +259,22 @@ export const insertWatchlistPerson = async (payload: {
   }
 
   return { error: null };
+};
+
+export const fetchWorkspaceUsage = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return { voices: 0, limit: VOICE_LIMIT };
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return { voices: 0, limit: VOICE_LIMIT };
+
+  const db = supabase as any;
+  const { count } = await db
+    .from("watchlist")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+
+  return { voices: count ?? 0, limit: VOICE_LIMIT };
 };
 
 export const insertWatchlistSource = async (payload: {

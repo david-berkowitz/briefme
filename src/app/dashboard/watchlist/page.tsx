@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   deleteWatchlistSource,
   fetchWatchlist,
+  fetchWorkspaceUsage,
   insertWatchlistPerson,
   insertWatchlistSource,
   updateWatchlistPerson,
@@ -90,17 +91,19 @@ export default function WatchlistPage() {
   const [sourceDrafts, setSourceDrafts] = useState<Record<string, SourceInput[]>>({});
   const [voiceDrafts, setVoiceDrafts] = useState<Record<string, { name: string; tagsText: string }>>({});
   const [sourceStatus, setSourceStatus] = useState<Record<string, string>>({});
+  const [usage, setUsage] = useState({ voices: 0, limit: 10 });
 
   const canSave = useMemo(() => {
     const hasName = form.name.trim().length > 1;
     const hasSource = sources.some((source) => source.source_url.trim().length > 3);
-    return hasName && hasSource;
-  }, [form.name, sources]);
+    return hasName && hasSource && usage.voices < usage.limit;
+  }, [form.name, sources, usage.voices, usage.limit]);
 
   const load = async () => {
     setLoading(true);
-    const data = await fetchWatchlist();
+    const [data, usageData] = await Promise.all([fetchWatchlist(), fetchWorkspaceUsage()]);
     setVoices(data as Voice[]);
+    setUsage(usageData);
     setLoading(false);
   };
 
@@ -336,6 +339,9 @@ export default function WatchlistPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Add a voice</p>
             <h2 className="text-xl font-semibold">Build your watchlist</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Beta limit: {usage.voices}/{usage.limit} people used. You can add multiple links per person.
+            </p>
           </div>
           <button
             type="submit"
@@ -426,6 +432,15 @@ export default function WatchlistPage() {
         {status === "error" && (
           <p className="text-sm text-rose-600">
             Could not save yet: {errorMessage || "Check Supabase config."}
+          </p>
+        )}
+        {usage.voices >= usage.limit && (
+          <p className="text-sm text-amber-700">
+            You’ve reached the beta limit of {usage.limit} people.{" "}
+            <a href="mailto:dberkowitz@gmail.com?subject=BriefMe%20Upgrade%20Request" className="font-semibold underline">
+              Contact David for an upgrade
+            </a>
+            .
           </p>
         )}
       </section>
