@@ -10,8 +10,10 @@ export default function AuthPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const supabase = getSupabase();
-  const redirectTarget =
-    typeof window === "undefined" ? "" : `${window.location.origin}/dashboard`;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+    (typeof window === "undefined" ? "" : window.location.origin);
+  const redirectTarget = `${siteUrl}/dashboard`;
   const upgradeEmail = "dberkowitz@gmail.com";
 
   const handleSubmit = async (event: React.FormEvent) => {
