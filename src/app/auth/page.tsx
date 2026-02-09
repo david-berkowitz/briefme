@@ -13,7 +13,7 @@ export default function AuthPage() {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
     (typeof window === "undefined" ? "" : window.location.origin);
-  const redirectTarget = `${siteUrl}/dashboard`;
+  const redirectTarget = `${siteUrl}/auth/callback`;
   const upgradeEmail = "dberkowitz@gmail.com";
 
   const handleSubmit = async (event: React.FormEvent) => {
