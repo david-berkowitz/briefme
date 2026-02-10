@@ -54,9 +54,8 @@ export default function AuthPage() {
             <img
               src="/briefme-logo.png"
               alt="BriefMe"
-              className="h-14 w-auto object-contain mix-blend-multiply md:h-16"
+              className="h-16 w-auto object-contain md:h-20"
             />
-            <span className="text-lg font-semibold text-slate-700">BriefMe</span>
           </div>
           <span className="badge">Beta access</span>
           <h1 className="text-4xl font-semibold md:text-5xl" style={{ fontFamily: "var(--font-display)" }}>

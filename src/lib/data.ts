@@ -6,6 +6,7 @@ type ResolveWorkspaceResult = {
   error: string | null;
 };
 const VOICE_LIMIT = 10;
+const ATTACHMENT_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
 
 type BriefHighlight = {
   authorName: string;
@@ -324,6 +325,16 @@ export const deleteWatchlistSource = async (id: string) => {
   return { error: error?.message ?? null };
 };
 
+export const deleteWatchlistPerson = async (id: string) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error } = await db.from("watchlist").delete().eq("id", id);
+
+  return { error: error?.message ?? null };
+};
+
 export const updateWatchlistAvatar = async (payload: {
   watchlist_id: string;
   avatar_url: string | null;
@@ -355,6 +366,53 @@ export const fetchClients = async () => {
     .order("created_at", { ascending: false });
 
   return data ?? [];
+};
+
+export const fetchVoiceClientLinks = async () => {
+  const supabase = getSupabase();
+  if (!supabase) return {} as Record<string, string[]>;
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return {} as Record<string, string[]>;
+
+  const db = supabase as any;
+  const { data } = await db
+    .from("client_watchlist_links")
+    .select("watchlist_id,client_id,clients!inner(id,workspace_id)")
+    .eq("clients.workspace_id", workspaceId);
+
+  const map: Record<string, string[]> = {};
+  for (const row of data ?? []) {
+    const voiceId = row.watchlist_id as string;
+    const clientId = row.client_id as string;
+    if (!map[voiceId]) map[voiceId] = [];
+    map[voiceId].push(clientId);
+  }
+
+  return map;
+};
+
+export const saveVoiceClientLinks = async (watchlistId: string, clientIds: string[]) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error: deleteError } = await db
+    .from("client_watchlist_links")
+    .delete()
+    .eq("watchlist_id", watchlistId);
+
+  if (deleteError) return { error: deleteError.message };
+
+  if (clientIds.length === 0) return { error: null };
+
+  const rows = clientIds.map((clientId) => ({
+    watchlist_id: watchlistId,
+    client_id: clientId
+  }));
+
+  const { error: insertError } = await db.from("client_watchlist_links").insert(rows);
+  return { error: insertError?.message ?? null };
 };
 
 export const insertClient = async (payload: {
@@ -462,6 +520,56 @@ export const fetchDigests = async () => {
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(12);
+
+  return data ?? [];
+};
+
+export const addBriefingAttachment = async (payload: {
+  digestId?: string | null;
+  clientId?: string | null;
+  fileName: string;
+  mimeType?: string | null;
+  fileSizeBytes: number;
+  fileDataBase64: string;
+}) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  if (payload.fileSizeBytes > ATTACHMENT_SIZE_LIMIT_BYTES) {
+    return { error: "Attachment is too large. Limit is 5 MB." };
+  }
+
+  const { workspaceId, error: workspaceError } = await resolveWorkspace();
+  if (!workspaceId) return { error: workspaceError ?? "Missing workspace." };
+
+  const db = supabase as any;
+  const { error } = await db.from("briefing_attachments").insert({
+    workspace_id: workspaceId,
+    digest_id: payload.digestId ?? null,
+    client_id: payload.clientId ?? null,
+    file_name: payload.fileName,
+    mime_type: payload.mimeType ?? null,
+    file_size_bytes: payload.fileSizeBytes,
+    file_data_base64: payload.fileDataBase64
+  });
+
+  return { error: error?.message ?? null };
+};
+
+export const fetchDigestAttachments = async (digestId: string) => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
+
+  const db = supabase as any;
+  const { data } = await db
+    .from("briefing_attachments")
+    .select("id,file_name,mime_type,file_size_bytes,file_data_base64,created_at")
+    .eq("workspace_id", workspaceId)
+    .eq("digest_id", digestId)
+    .order("created_at", { ascending: false });
 
   return data ?? [];
 };

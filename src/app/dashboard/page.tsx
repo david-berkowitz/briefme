@@ -171,7 +171,15 @@ export default function DashboardPage() {
               <li>Bluesky daily crawl</li>
               <li>Manual additions welcome</li>
             </ul>
-            <button className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold">Connect inbox</button>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700">Daily alerts check</p>
+              <p>1. Refresh posts now.</p>
+              <p>2. Generate today’s briefs in Daily Digest.</p>
+              <p>3. If email alerts fail, re-check SMTP in Supabase Auth settings.</p>
+            </div>
+            <a href="/dashboard/digest" className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold">
+              Open daily digest
+            </a>
           </div>
 
           <div className="card space-y-3">

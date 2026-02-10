@@ -62,9 +62,8 @@ export default function DashboardLayout({
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-10 w-auto object-contain mix-blend-multiply"
+                className="h-12 w-auto object-contain"
               />
-              <span className="brand-title">BriefMe</span>
             </Link>
             <span className="chip">
               Founder

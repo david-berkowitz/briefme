@@ -51,6 +51,26 @@ create table public.watchlist_sources (
 create unique index if not exists watchlist_sources_unique
   on public.watchlist_sources (watchlist_id, source, source_url);
 
+create table public.client_watchlist_links (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.clients(id) on delete cascade,
+  watchlist_id uuid not null references public.watchlist(id) on delete cascade,
+  created_at timestamp with time zone default now(),
+  unique (client_id, watchlist_id)
+);
+
+create table public.briefing_attachments (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  client_id uuid references public.clients(id) on delete set null,
+  digest_id uuid references public.digests(id) on delete cascade,
+  file_name text not null,
+  mime_type text,
+  file_size_bytes integer not null,
+  file_data_base64 text not null,
+  created_at timestamp with time zone default now()
+);
+
 create table public.digests (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade,
@@ -81,7 +101,9 @@ alter table public.beta_signups enable row level security;
 alter table public.clients enable row level security;
 alter table public.watchlist enable row level security;
 alter table public.watchlist_sources enable row level security;
+alter table public.client_watchlist_links enable row level security;
 alter table public.digests enable row level security;
+alter table public.briefing_attachments enable row level security;
 alter table public.posts enable row level security;
 
 create policy workspaces_select_own on public.workspaces
@@ -151,6 +173,24 @@ with check (
   )
 );
 
+create policy client_watchlist_links_all_own on public.client_watchlist_links
+for all using (
+  exists (
+    select 1
+    from public.clients c
+    join public.workspaces w on w.id = c.workspace_id
+    where c.id = client_watchlist_links.client_id and w.owner_user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.clients c
+    join public.workspaces w on w.id = c.workspace_id
+    where c.id = client_watchlist_links.client_id and w.owner_user_id = auth.uid()
+  )
+);
+
 create policy digests_all_own on public.digests
 for all using (
   exists (
@@ -176,5 +216,19 @@ with check (
   exists (
     select 1 from public.workspaces w
     where w.id = posts.workspace_id and w.owner_user_id = auth.uid()
+  )
+);
+
+create policy briefing_attachments_all_own on public.briefing_attachments
+for all using (
+  exists (
+    select 1 from public.workspaces w
+    where w.id = briefing_attachments.workspace_id and w.owner_user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1 from public.workspaces w
+    where w.id = briefing_attachments.workspace_id and w.owner_user_id = auth.uid()
   )
 );

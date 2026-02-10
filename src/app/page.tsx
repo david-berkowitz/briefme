@@ -8,11 +8,8 @@ export default function Home() {
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-12 w-auto object-contain mix-blend-multiply md:h-14"
+                className="h-14 w-auto object-contain md:h-16"
               />
-              <span className="brand-title text-lg font-semibold tracking-tight">
-                BriefMe
-              </span>
             </div>
             <div className="flex items-center gap-3 text-sm font-semibold md:gap-6">
               <a href="#how">How it works</a>
@@ -236,9 +233,8 @@ export default function Home() {
               <img
                 src="/briefme-logo.png"
                 alt="BriefMe"
-                className="h-10 w-auto object-contain mix-blend-multiply"
+                className="h-12 w-auto object-contain"
               />
-              <p className="text-lg font-semibold">BriefMe</p>
             </div>
             <p className="text-sm text-slate-500">Daily intelligence for modern comms.</p>
           </div>

@@ -2,10 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteWatchlistPerson,
   deleteWatchlistSource,
+  fetchClients,
+  fetchVoiceClientLinks,
   fetchWatchlist,
   fetchWorkspaceUsage,
   insertWatchlistPerson,
+  saveVoiceClientLinks,
   insertWatchlistSource,
   updateWatchlistPerson,
   updateWatchlistSource
@@ -31,6 +35,11 @@ type SourceInput = {
   source: string;
   source_url: string;
   handle?: string | null;
+};
+
+type ClientItem = {
+  id: string;
+  name: string;
 };
 
 const newSource = () => ({
@@ -92,6 +101,9 @@ export default function WatchlistPage() {
   const [voiceDrafts, setVoiceDrafts] = useState<Record<string, { name: string; tagsText: string }>>({});
   const [sourceStatus, setSourceStatus] = useState<Record<string, string>>({});
   const [usage, setUsage] = useState({ voices: 0, limit: 10 });
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [voiceClientLinks, setVoiceClientLinks] = useState<Record<string, string[]>>({});
+  const [voiceClientDrafts, setVoiceClientDrafts] = useState<Record<string, string[]>>({});
 
   const canSave = useMemo(() => {
     const hasName = form.name.trim().length > 1;
@@ -101,9 +113,16 @@ export default function WatchlistPage() {
 
   const load = async () => {
     setLoading(true);
-    const [data, usageData] = await Promise.all([fetchWatchlist(), fetchWorkspaceUsage()]);
+    const [data, usageData, clientRows, clientLinks] = await Promise.all([
+      fetchWatchlist(),
+      fetchWorkspaceUsage(),
+      fetchClients(),
+      fetchVoiceClientLinks()
+    ]);
     setVoices(data as Voice[]);
     setUsage(usageData);
+    setClients(clientRows as ClientItem[]);
+    setVoiceClientLinks(clientLinks);
     setLoading(false);
   };
 
@@ -189,6 +208,10 @@ export default function WatchlistPage() {
       }
     }));
     setEditingVoiceId(voice.id);
+    setVoiceClientDrafts((prev) => ({
+      ...prev,
+      [voice.id]: [...(voiceClientLinks[voice.id] ?? [])]
+    }));
     setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
   };
 
@@ -220,6 +243,15 @@ export default function WatchlistPage() {
     });
     if (personError) {
       setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not update profile: ${personError}` }));
+      return;
+    }
+
+    const { error: linkError } = await saveVoiceClientLinks(
+      voice.id,
+      voiceClientDrafts[voice.id] ?? []
+    );
+    if (linkError) {
+      setSourceStatus((prev) => ({ ...prev, [voice.id]: `Could not update client links: ${linkError}` }));
       return;
     }
 
@@ -286,7 +318,24 @@ export default function WatchlistPage() {
     }
 
     setSourceStatus((prev) => ({ ...prev, [voice.id]: "Saved." }));
+    setVoiceClientLinks((prev) => ({
+      ...prev,
+      [voice.id]: [...(voiceClientDrafts[voice.id] ?? [])]
+    }));
     setEditingVoiceId(null);
+    await load();
+  };
+
+  const handleDeleteVoice = async (voice: Voice) => {
+    const confirmed = window.confirm(`Delete ${voice.name} and all linked sources? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const { error } = await deleteWatchlistPerson(voice.id);
+    if (error) {
+      setStatus("error");
+      setErrorMessage(error);
+      return;
+    }
     await load();
   };
 
@@ -462,6 +511,7 @@ export default function WatchlistPage() {
                 name: voice.name,
                 tagsText: (voice.tags ?? []).join(", ")
               };
+              const voiceClientDraft = voiceClientDrafts[voice.id] ?? [];
 
               return (
                 <div key={voice.id} className="card voice-card space-y-4">
@@ -502,6 +552,20 @@ export default function WatchlistPage() {
                     ))}
                   </div>
 
+                  {(voiceClientLinks[voice.id]?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {(voiceClientLinks[voice.id] ?? []).map((clientId) => {
+                        const client = clients.find((item) => item.id === clientId);
+                        if (!client) return null;
+                        return (
+                          <span key={clientId} className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                            {client.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                     <span>Cadence: {voice.cadence ?? "daily"}</span>
                     <span>•</span>
@@ -533,6 +597,39 @@ export default function WatchlistPage() {
                             }))
                           }
                         />
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 p-3">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Optional client links
+                        </p>
+                        {clients.length === 0 ? (
+                          <p className="text-xs text-slate-500">No clients yet. Add clients in the Clients tab first.</p>
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {clients.map((client) => {
+                              const checked = voiceClientDraft.includes(client.id);
+                              return (
+                                <label key={client.id} className="flex items-center gap-2 text-xs text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) => {
+                                      setVoiceClientDrafts((prev) => {
+                                        const current = prev[voice.id] ?? [];
+                                        const next = event.target.checked
+                                          ? [...current, client.id]
+                                          : current.filter((id) => id !== client.id);
+                                        return { ...prev, [voice.id]: next };
+                                      });
+                                    }}
+                                  />
+                                  <span>{client.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {draftRows.map((source) => (
@@ -601,6 +698,10 @@ export default function WatchlistPage() {
                           onClick={() => {
                             setEditingVoiceId(null);
                             setVoiceDrafts((prev) => ({ ...prev, [voice.id]: { name: voice.name, tagsText: (voice.tags ?? []).join(", ") } }));
+                            setVoiceClientDrafts((prev) => ({
+                              ...prev,
+                              [voice.id]: [...(voiceClientLinks[voice.id] ?? [])]
+                            }));
                             setSourceStatus((prev) => ({ ...prev, [voice.id]: "" }));
                           }}
                           className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
@@ -641,9 +742,18 @@ export default function WatchlistPage() {
                         <p className="text-xs text-slate-400">No sources yet.</p>
                       )}
                       <div>
-                        <button type="button" onClick={() => startSourceEdit(voice)} className="btn-secondary px-3 py-1.5 text-xs">
-                          Edit profile
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => startSourceEdit(voice)} className="btn-secondary px-3 py-1.5 text-xs">
+                            Edit profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteVoice(voice)}
+                            className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
