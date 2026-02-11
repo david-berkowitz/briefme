@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchDashboardStats, fetchRecentPosts, runBlueskyIngestForWorkspace } from "@/lib/data";
+import { DailyRunStatus, fetchDashboardStats, fetchDailyRunStatus, fetchRecentPosts, runBlueskyIngestForWorkspace } from "@/lib/data";
 
 type Stats = {
   voices: number;
@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [ingesting, setIngesting] = useState(false);
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
+  const [dailyStatus, setDailyStatus] = useState<DailyRunStatus | null>(null);
 
   const loadStats = async () => {
     setLoading(true);
@@ -48,9 +49,15 @@ export default function DashboardPage() {
     setLoadingPosts(false);
   };
 
+  const loadDailyStatus = async () => {
+    const status = await fetchDailyRunStatus();
+    setDailyStatus(status);
+  };
+
   useEffect(() => {
     void loadStats();
     void loadPosts();
+    void loadDailyStatus();
   }, []);
 
   const runIngest = async () => {
@@ -66,8 +73,24 @@ export default function DashboardPage() {
 
     await loadPosts();
     await loadStats();
+    await loadDailyStatus();
     setIngesting(false);
   };
+
+  const completedSteps = [
+    stats.voices > 0,
+    stats.clients > 0,
+    stats.voices > 0 && posts.length > 0,
+    stats.digests > 0
+  ].filter(Boolean).length;
+
+  const nextRunTime = (() => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(8, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    return next.toLocaleString();
+  })();
 
   return (
     <div className="space-y-8">
@@ -93,15 +116,22 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {stats.workspaceReady && stats.voices === 0 && stats.clients === 0 && (
+      {stats.workspaceReady && completedSteps < 4 && (
         <section className="card space-y-3">
-          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Getting started</p>
-          <h2 className="text-lg font-semibold">New account checklist</h2>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
-            <li>Add 5-10 voices in Watchlist.</li>
-            <li>Add at least one client in Clients with narratives and risks.</li>
-            <li>Click “Refresh posts now” to pull the latest activity.</li>
-            <li>Open Daily Digest and click “Generate today’s briefs”.</li>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Getting started</p>
+              <h2 className="text-lg font-semibold">Quick setup checklist</h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              {completedSteps}/4 complete
+            </span>
+          </div>
+          <ol className="space-y-2 text-sm text-slate-700">
+            <li className={stats.voices > 0 ? "text-emerald-700" : ""}>{stats.voices > 0 ? "Done:" : "Step 1:"} Add at least one person in Watchlist.</li>
+            <li className={stats.clients > 0 ? "text-emerald-700" : ""}>{stats.clients > 0 ? "Done:" : "Step 2:"} Add at least one client profile.</li>
+            <li className={stats.voices > 0 && posts.length > 0 ? "text-emerald-700" : ""}>{stats.voices > 0 && posts.length > 0 ? "Done:" : "Step 3:"} Pull latest posts with “Refresh posts now”.</li>
+            <li className={stats.digests > 0 ? "text-emerald-700" : ""}>{stats.digests > 0 ? "Done:" : "Step 4:"} Generate first brief in Daily Digest.</li>
           </ol>
         </section>
       )}
@@ -172,14 +202,27 @@ export default function DashboardPage() {
               <li>Manual additions welcome</li>
             </ul>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-              <p className="font-semibold text-slate-700">Daily alerts check</p>
-              <p>1. Refresh posts now.</p>
-              <p>2. Generate today’s briefs in Daily Digest.</p>
-              <p>3. If email alerts fail, re-check SMTP in Supabase Auth settings.</p>
+              <p className="font-semibold text-slate-700">Daily run status</p>
+              {dailyStatus ? (
+                <>
+                  <p>Last run: {new Date(dailyStatus.started_at).toLocaleString()}</p>
+                  <p>Status: {dailyStatus.status === "success" ? "Success" : "Failed"}</p>
+                  <p>
+                    Processed: {dailyStatus.posts_inserted} posts, {dailyStatus.briefs_created} briefs, {dailyStatus.emails_sent} emails
+                  </p>
+                  {dailyStatus.error_message && <p className="text-rose-600">Error: {dailyStatus.error_message}</p>}
+                </>
+              ) : (
+                <p>No automatic run has completed yet.</p>
+              )}
+              <p className="mt-2">Next scheduled run: {nextRunTime}</p>
             </div>
             <a href="/dashboard/digest" className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold">
               Open daily digest
             </a>
+            <p className="text-xs text-slate-500">
+              If daily emails do not arrive, double-check SMTP settings in Supabase and set `RESEND_API_KEY` + `ALERT_FROM_EMAIL` in Netlify.
+            </p>
           </div>
 
           <div className="card space-y-3">

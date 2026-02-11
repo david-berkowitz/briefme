@@ -18,6 +18,9 @@
 - Bulk import (paste many links/handles at once).
 - Client-level filters and saved views.
 - Inline edit/delete for voice profiles (name, tags, sources).
+- Delivery preferences (daily send time + timezone picker).
+- Daily run analytics card (success rate and failure reasons).
+- One-click retry for failed automated runs.
 
 ## Product value layer (next phase)
 - Automatic daily brief generation by client.
@@ -31,6 +34,8 @@
 - Cross-network identity suggestions (link likely profiles for same person).
 - Scheduled background ingestion jobs.
 - Monitoring, retry logic, and audit logs.
+- Move attachments to object storage with signed URLs.
+- Admin controls for beta approvals and upgrade requests.
 
 ## Source Expansion Plan
 - Phase 1 (already live): Bluesky + LinkedIn-notification-email pipeline.

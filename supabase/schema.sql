@@ -71,6 +71,18 @@ create table public.briefing_attachments (
   created_at timestamp with time zone default now()
 );
 
+create table public.daily_run_logs (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  started_at timestamp with time zone not null default now(),
+  completed_at timestamp with time zone,
+  status text not null check (status in ('success', 'failed')),
+  posts_inserted integer not null default 0,
+  briefs_created integer not null default 0,
+  emails_sent integer not null default 0,
+  error_message text
+);
+
 create table public.digests (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid references public.workspaces(id) on delete cascade,
@@ -104,6 +116,7 @@ alter table public.watchlist_sources enable row level security;
 alter table public.client_watchlist_links enable row level security;
 alter table public.digests enable row level security;
 alter table public.briefing_attachments enable row level security;
+alter table public.daily_run_logs enable row level security;
 alter table public.posts enable row level security;
 
 create policy workspaces_select_own on public.workspaces
@@ -230,5 +243,13 @@ with check (
   exists (
     select 1 from public.workspaces w
     where w.id = briefing_attachments.workspace_id and w.owner_user_id = auth.uid()
+  )
+);
+
+create policy daily_run_logs_select_own on public.daily_run_logs
+for select using (
+  exists (
+    select 1 from public.workspaces w
+    where w.id = daily_run_logs.workspace_id and w.owner_user_id = auth.uid()
   )
 );

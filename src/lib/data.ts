@@ -23,6 +23,16 @@ type ClientBrief = {
   highlights: BriefHighlight[];
 };
 
+export type DailyRunStatus = {
+  started_at: string;
+  completed_at: string | null;
+  status: "success" | "failed";
+  posts_inserted: number;
+  briefs_created: number;
+  emails_sent: number;
+  error_message: string | null;
+};
+
 const STOPWORDS = new Set([
   "the",
   "and",
@@ -488,6 +498,26 @@ export const fetchDashboardStats = async () => {
   };
 };
 
+export const fetchDailyRunStatus = async (): Promise<DailyRunStatus | null> => {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return null;
+
+  const db = supabase as any;
+  const { data } = await db
+    .from("daily_run_logs")
+    .select("started_at,completed_at,status,posts_inserted,briefs_created,emails_sent,error_message")
+    .eq("workspace_id", workspaceId)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  return data as DailyRunStatus;
+};
+
 export const fetchRecentPosts = async () => {
   const supabase = getSupabase();
   if (!supabase) return [];
@@ -647,7 +677,7 @@ export const generateClientBriefs = async () => {
 
   const db = supabase as any;
 
-  const [{ data: clients }, { data: posts }] = await Promise.all([
+  const [{ data: clients }, { data: posts }, { data: links }] = await Promise.all([
     db
       .from("clients")
       .select("id,name,positioning,narratives,risks")
@@ -655,10 +685,13 @@ export const generateClientBriefs = async () => {
       .order("created_at", { ascending: false }),
     db
       .from("posts")
-      .select("id,source,author_name,content,posted_at")
+      .select("id,source,author_name,content,posted_at,watchlist_id")
       .eq("workspace_id", workspaceId)
       .order("posted_at", { ascending: false })
-      .limit(80)
+      .limit(120),
+    db
+      .from("client_watchlist_links")
+      .select("client_id,watchlist_id")
   ]);
 
   const clientRows = clients ?? [];
@@ -668,11 +701,25 @@ export const generateClientBriefs = async () => {
     return { error: "Add at least one client first.", created: 0, briefs: [] as ClientBrief[] };
   }
 
+  const linksByClient = new Map<string, Set<string>>();
+  for (const row of links ?? []) {
+    const clientId = String((row as any).client_id ?? "");
+    const watchlistId = String((row as any).watchlist_id ?? "");
+    if (!clientId || !watchlistId) continue;
+    if (!linksByClient.has(clientId)) linksByClient.set(clientId, new Set<string>());
+    linksByClient.get(clientId)?.add(watchlistId);
+  }
+
   const briefs: ClientBrief[] = clientRows.map((client: any) => {
     const contextText = [client.positioning, client.narratives, client.risks].filter(Boolean).join(" ");
     const keywords = new Set(tokenize(contextText));
+    const linkedWatchlistIds = linksByClient.get(client.id) ?? null;
+    const scopedPosts =
+      linkedWatchlistIds && linkedWatchlistIds.size > 0
+        ? postRows.filter((post: any) => post.watchlist_id && linkedWatchlistIds.has(post.watchlist_id))
+        : postRows;
 
-    const scored = postRows
+    const scored = scopedPosts
       .map((post: any) => {
         const score = scorePost(post.content, keywords, post.posted_at);
         return {
@@ -688,7 +735,7 @@ export const generateClientBriefs = async () => {
 
     const fallback =
       scored.length === 0
-        ? postRows.slice(0, 3).map((post: any) => ({
+        ? scopedPosts.slice(0, 3).map((post: any) => ({
             authorName: post.author_name,
             source: post.source,
             content: post.content ?? "",

@@ -58,6 +58,18 @@ create table if not exists public.briefing_attachments (
   created_at timestamp with time zone default now()
 );
 
+create table if not exists public.daily_run_logs (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  started_at timestamp with time zone not null default now(),
+  completed_at timestamp with time zone,
+  status text not null check (status in ('success', 'failed')),
+  posts_inserted integer not null default 0,
+  briefs_created integer not null default 0,
+  emails_sent integer not null default 0,
+  error_message text
+);
+
 create unique index if not exists posts_post_url_unique
   on public.posts (post_url)
   where post_url is not null;
@@ -70,6 +82,7 @@ alter table public.watchlist_sources enable row level security;
 alter table public.client_watchlist_links enable row level security;
 alter table public.digests enable row level security;
 alter table public.briefing_attachments enable row level security;
+alter table public.daily_run_logs enable row level security;
 alter table public.posts enable row level security;
 
 drop policy if exists workspaces_select_own on public.workspaces;
@@ -85,6 +98,7 @@ drop policy if exists watchlist_sources_all_own on public.watchlist_sources;
 drop policy if exists client_watchlist_links_all_own on public.client_watchlist_links;
 drop policy if exists digests_all_own on public.digests;
 drop policy if exists briefing_attachments_all_own on public.briefing_attachments;
+drop policy if exists daily_run_logs_select_own on public.daily_run_logs;
 drop policy if exists posts_all_own on public.posts;
 
 create policy workspaces_select_own on public.workspaces
@@ -211,5 +225,13 @@ with check (
   exists (
     select 1 from public.workspaces w
     where w.id = briefing_attachments.workspace_id and w.owner_user_id = auth.uid()
+  )
+);
+
+create policy daily_run_logs_select_own on public.daily_run_logs
+for select using (
+  exists (
+    select 1 from public.workspaces w
+    where w.id = daily_run_logs.workspace_id and w.owner_user_id = auth.uid()
   )
 );
