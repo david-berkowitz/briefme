@@ -44,19 +44,35 @@ export async function POST(request: Request) {
     watchlistId = (sourceMatch as { watchlist_id?: string } | null)?.watchlist_id ?? null;
   }
 
-  const { error } = await db.from("posts").upsert(
-    {
-      workspace_id: workspaceId,
-      watchlist_id: watchlistId,
-      source: "LinkedIn",
-      author_name: body.author_name,
-      author_url: body.author_url,
-      post_url: body.post_url,
-      content: body.content,
-      posted_at: body.posted_at ?? null
-    },
-    { onConflict: "post_url" }
-  );
+  const row = {
+    workspace_id: workspaceId,
+    watchlist_id: watchlistId,
+    source: "LinkedIn",
+    author_name: body.author_name,
+    author_url: body.author_url,
+    post_url: body.post_url,
+    content: body.content,
+    posted_at: body.posted_at ?? null
+  };
+
+  let error: { message: string } | null = null;
+  if (body.post_url) {
+    const { data: existing } = await db
+      .from("posts")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("post_url", body.post_url)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existing) {
+      const insertRes = await db.from("posts").insert(row);
+      error = insertRes.error;
+    }
+  } else {
+    const insertRes = await db.from("posts").insert(row);
+    error = insertRes.error;
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -104,8 +104,8 @@ create table public.posts (
   created_at timestamp with time zone default now()
 );
 
-create unique index if not exists posts_post_url_unique
-  on public.posts (post_url)
+create unique index if not exists posts_workspace_post_url_unique
+  on public.posts (workspace_id, post_url)
   where post_url is not null;
 
 alter table public.workspaces enable row level security;

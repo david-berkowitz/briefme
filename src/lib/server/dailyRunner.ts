@@ -229,8 +229,33 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
       posted_at: post.postedAt
     }));
 
-    const { error } = await db.from("posts").upsert(payload, { onConflict: "post_url" });
-    if (!error) postsInserted += payload.length;
+    const withUrl = payload.filter((row) => row.post_url);
+    const withoutUrl = payload.filter((row) => !row.post_url);
+
+    let existingUrls = new Set<string>();
+    if (withUrl.length > 0) {
+      const { data: existing } = await db
+        .from("posts")
+        .select("post_url")
+        .eq("workspace_id", workspace.id)
+        .in(
+          "post_url",
+          withUrl.map((row) => row.post_url)
+        );
+      existingUrls = new Set((existing ?? []).map((row: any) => row.post_url));
+    }
+
+    const toInsert = [
+      ...withUrl.filter((row) => !existingUrls.has(row.post_url)),
+      ...withoutUrl
+    ];
+
+    if (toInsert.length === 0) {
+      continue;
+    }
+
+    const { error } = await db.from("posts").insert(toInsert);
+    if (!error) postsInserted += toInsert.length;
   }
 
   const [{ data: clients }, { data: posts }, { data: links }] = await Promise.all([

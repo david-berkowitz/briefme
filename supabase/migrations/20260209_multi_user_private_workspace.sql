@@ -70,8 +70,9 @@ create table if not exists public.daily_run_logs (
   error_message text
 );
 
-create unique index if not exists posts_post_url_unique
-  on public.posts (post_url)
+drop index if exists public.posts_post_url_unique;
+create unique index if not exists posts_workspace_post_url_unique
+  on public.posts (workspace_id, post_url)
   where post_url is not null;
 
 alter table public.workspaces enable row level security;
