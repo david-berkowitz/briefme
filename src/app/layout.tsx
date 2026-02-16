@@ -39,6 +39,11 @@ export const metadata: Metadata = {
     title: "BriefMe | Daily intelligence for modern comms",
     description:
       "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways."
+  },
+  icons: {
+    icon: [{ url: "/briefme-icon.png", type: "image/png" }],
+    shortcut: ["/briefme-icon.png"],
+    apple: [{ url: "/briefme-icon.png" }]
   }
 };
 

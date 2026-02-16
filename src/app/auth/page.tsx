@@ -52,9 +52,9 @@ export default function AuthPage() {
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <img
-              src="/briefme-logo.png"
+              src="/briefme-logo-wide.png"
               alt="BriefMe"
-              className="h-16 w-auto object-contain md:h-20"
+              className="h-20 w-auto object-contain md:h-24"
             />
           </div>
           <span className="badge">Beta access</span>

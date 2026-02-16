@@ -60,9 +60,9 @@ export default function DashboardLayout({
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 text-xl font-semibold">
               <img
-                src="/briefme-logo.png"
+                src="/briefme-logo-wide.png"
                 alt="BriefMe"
-                className="h-12 w-auto object-contain"
+                className="h-10 w-auto object-contain"
               />
             </Link>
             <span className="chip">
