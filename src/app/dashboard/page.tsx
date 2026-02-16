@@ -92,6 +92,12 @@ export default function DashboardPage() {
     return next.toLocaleString();
   })();
 
+  const freshPostCount = posts.filter((post) => {
+    const stamp = post.posted_at ?? post.created_at;
+    if (!stamp) return false;
+    return Date.now() - new Date(stamp).getTime() <= 24 * 60 * 60 * 1000;
+  }).length;
+
   return (
     <div className="space-y-8">
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -216,6 +222,15 @@ export default function DashboardPage() {
                 <p>No automatic run has completed yet.</p>
               )}
               <p className="mt-2">Next scheduled run: {nextRunTime}</p>
+            </div>
+            <div className={`rounded-xl border p-3 text-xs ${freshPostCount === 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
+              <p className="font-semibold">Freshness check (last 24h)</p>
+              <p>{freshPostCount} recent tracked posts found.</p>
+              {freshPostCount === 0 && (
+                <p className="mt-1">
+                  Briefs may be light today. Add more sources or click “Refresh posts now” to pull fresh updates.
+                </p>
+              )}
             </div>
             <a href="/dashboard/digest" className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold">
               Open daily digest

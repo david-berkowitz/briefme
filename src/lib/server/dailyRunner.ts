@@ -5,6 +5,8 @@ type BriefHighlight = {
   source: string;
   content: string;
   postedAt: string | null;
+  authorUrl: string | null;
+  postUrl: string | null;
   score: number;
 };
 
@@ -55,6 +57,17 @@ const tokenize = (value: string | null | undefined) => {
     .filter((token) => token.length > 3 && !STOPWORDS.has(token));
 };
 
+const extractTaggedSection = (text: string | null | undefined, tag: "GOALS" | "DO" | "DONT") => {
+  if (!text) return "";
+  const match = text.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[\\/${tag}\\]`, "i"));
+  return match?.[1]?.trim() ?? "";
+};
+
+const stripTaggedSections = (text: string | null | undefined) => {
+  if (!text) return "";
+  return text.replace(/\[(GOALS|DO|DONT)\][\s\S]*?\[\/\1\]/gi, "").trim();
+};
+
 const scorePost = (content: string | null, keywords: Set<string>, postedAt: string | null) => {
   if (!content) return 0;
 
@@ -76,27 +89,60 @@ const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
   const top = highlights.slice(0, 3);
 
   if (top.length === 0) {
-    return `No strong matches found for ${client.name} today. Recommended move: monitor and wait for stronger signal overlap with your narratives.`;
+    return [
+      "What changed:",
+      "- No new tracked updates matched this client today.",
+      "",
+      "Why it matters for this client:",
+      "- Your monitoring is active, but there are no high-signal items to brief right now.",
+      "",
+      "Recommended action:",
+      "- Keep monitoring.",
+      "- Refresh sources and expand watchlist coverage if this repeats for 2+ days."
+    ].join("\n");
   }
 
-  const lines = top.map((item, index) => {
+  const lines = top.map((item) => {
     const cleaned = (item.content ?? "").replace(/\s+/g, " ").trim();
     const short = cleaned.length > 180 ? `${cleaned.slice(0, 180)}...` : cleaned;
-    return `${index + 1}. ${item.authorName} (${item.source}): ${short}`;
+    const link = item.postUrl ?? item.authorUrl ?? "";
+    return link
+      ? `- ${item.authorName} (${item.source}): ${short} [Source: ${link}]`
+      : `- ${item.authorName} (${item.source}): ${short}`;
   });
 
-  const strategyFocus = [client.positioning, client.narratives, client.risks].filter(Boolean).join(" | ");
+  const goals = extractTaggedSection(client.narratives, "GOALS");
+  const doGuidance = extractTaggedSection(client.narratives, "DO");
+  const dontGuidance = extractTaggedSection(client.narratives, "DONT");
+  const baseNarratives = stripTaggedSections(client.narratives);
+  const strategyFocus = [client.positioning, goals || client.risks, baseNarratives].filter(Boolean).join(" | ");
+  const firstSignal = top[0];
+  const actionHook = firstSignal
+    ? `${firstSignal.source} conversation from ${firstSignal.authorName}`
+    : "today's top signal";
 
   return [
-    `Client focus: ${client.name}`,
-    strategyFocus ? `Context: ${strategyFocus}` : "Context: No custom context added yet.",
-    "Top matched signals:",
+    "What changed:",
     ...lines,
-    "Recommended move: publish a short POV response tied to your strongest differentiator and one proof point."
+    "",
+    "Why it matters for this client:",
+    strategyFocus
+      ? `- Priority context: ${strategyFocus}`
+      : "- Add client priorities in Clients to improve matching and recommendations.",
+    "- This signal can shape messaging, positioning, or response timing today.",
+    "",
+    "Recommended action:",
+    `- Draft a short POV tied to ${actionHook}.`,
+    doGuidance ? `- Use this guidance: ${doGuidance}` : "- Anchor the response in one clear proof point for this client.",
+    dontGuidance ? `- Avoid: ${dontGuidance}` : ""
   ].join("\n");
 };
 
-const sendDigestEmail = async (to: string, workspaceName: string, summaryLines: string[]) => {
+const sendDigestEmail = async (
+  to: string,
+  workspaceName: string,
+  briefItems: Array<{ title: string; summary: string }>
+) => {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.ALERT_FROM_EMAIL;
 
@@ -104,10 +150,22 @@ const sendDigestEmail = async (to: string, workspaceName: string, summaryLines: 
     return { sent: false, reason: "Email provider not configured." };
   }
 
+  const summaryHtml = briefItems
+    .map((item) => {
+      const cleaned = item.summary.replace(/\n/g, "<br />");
+      return `
+        <li style="margin-bottom:18px;">
+          <div style="font-weight:700;margin-bottom:6px;">${item.title}</div>
+          <div style="line-height:1.45;">${cleaned}</div>
+        </li>
+      `;
+    })
+    .join("");
+
   const html = `
     <h2>${workspaceName}: Daily Brief</h2>
     <p>Here is your daily BriefMe update:</p>
-    <ul>${summaryLines.map((line) => `<li>${line}</li>`).join("")}</ul>
+    <ul style="padding-left:18px;">${summaryHtml}</ul>
     <p><a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://briefme.info"}/dashboard/digest">Open full dashboard digest</a></p>
   `;
 
@@ -183,7 +241,7 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
       .order("created_at", { ascending: false }),
     db
       .from("posts")
-      .select("id,source,author_name,content,posted_at,watchlist_id")
+      .select("id,source,author_name,author_url,post_url,content,posted_at,watchlist_id")
       .eq("workspace_id", workspace.id)
       .order("posted_at", { ascending: false })
       .limit(120),
@@ -203,7 +261,15 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
 
   if (clientRows.length > 0) {
     const inserts = clientRows.map((client: any) => {
-      const contextText = [client.positioning, client.narratives, client.risks].filter(Boolean).join(" ");
+      const contextText = [
+        client.positioning,
+        stripTaggedSections(client.narratives),
+        extractTaggedSection(client.narratives, "GOALS"),
+        extractTaggedSection(client.narratives, "DO"),
+        client.risks
+      ]
+        .filter(Boolean)
+        .join(" ");
       const keywords = new Set(tokenize(contextText));
       const linkedWatchlistIds = linksByClient.get(client.id) ?? null;
       const scopedPosts =
@@ -217,6 +283,8 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
           return {
             authorName: post.author_name,
             source: post.source,
+            authorUrl: post.author_url ?? null,
+            postUrl: post.post_url ?? null,
             content: post.content ?? "",
             postedAt: post.posted_at,
             score
@@ -230,6 +298,8 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
           ? scopedPosts.slice(0, 3).map((post: any) => ({
               authorName: post.author_name,
               source: post.source,
+              authorUrl: post.author_url ?? null,
+              postUrl: post.post_url ?? null,
               content: post.content ?? "",
               postedAt: post.posted_at,
               score: 0
@@ -248,9 +318,13 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
     const { error } = await db.from("digests").insert(inserts);
     if (!error) briefsCreated += inserts.length;
 
-    const topEmailLines = inserts.slice(0, 3).map((item: any) => `${item.title}`);
-    if (topEmailLines.length > 0) {
-      const mail = await sendDigestEmail(workspace.owner_email, workspace.name, topEmailLines);
+    const emailItems = inserts.slice(0, 2).map((item: any) => ({
+      title: item.title as string,
+      summary: String(item.summary ?? "").slice(0, 800)
+    }));
+
+    if (emailItems.length > 0) {
+      const mail = await sendDigestEmail(workspace.owner_email, workspace.name, emailItems);
       if (mail.sent) emailsSent = 1;
     }
   }

@@ -11,13 +11,27 @@ type Client = {
   risks: string | null;
 };
 
+const extractTaggedSection = (text: string | null | undefined, tag: "GOALS" | "DO" | "DONT") => {
+  if (!text) return "";
+  const match = text.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[\\/${tag}\\]`, "i"));
+  return match?.[1]?.trim() ?? "";
+};
+
+const stripTaggedSections = (text: string | null | undefined) => {
+  if (!text) return "";
+  return text.replace(/\[(GOALS|DO|DONT)\][\s\S]*?\[\/\1\]/gi, "").trim();
+};
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     name: "",
     positioning: "",
+    goals: "",
     narratives: "",
+    doLanguage: "",
+    dontLanguage: "",
     risks: ""
   });
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -42,16 +56,31 @@ export default function ClientsPage() {
     }
     setStatus("saving");
 
+    const narrativeParts = [
+      form.narratives.trim(),
+      form.goals.trim() ? `[GOALS]\n${form.goals.trim()}\n[/GOALS]` : "",
+      form.doLanguage.trim() ? `[DO]\n${form.doLanguage.trim()}\n[/DO]` : "",
+      form.dontLanguage.trim() ? `[DONT]\n${form.dontLanguage.trim()}\n[/DONT]` : ""
+    ].filter(Boolean);
+
     const { error } = await insertClient({
       name: form.name,
       positioning: form.positioning || undefined,
-      narratives: form.narratives || undefined,
+      narratives: narrativeParts.join("\n\n") || undefined,
       risks: form.risks || undefined
     });
 
     setStatus(error ? "error" : "saved");
     if (!error) {
-      setForm({ name: "", positioning: "", narratives: "", risks: "" });
+      setForm({
+        name: "",
+        positioning: "",
+        goals: "",
+        narratives: "",
+        doLanguage: "",
+        dontLanguage: "",
+        risks: ""
+      });
       await load();
     }
   };
@@ -88,17 +117,38 @@ export default function ClientsPage() {
           />
           <textarea
             className="min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+            placeholder="Client goals this quarter"
+            value={form.goals}
+            onChange={(event) => setForm({ ...form, goals: event.target.value })}
+          />
+          <textarea
+            className="min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm"
             placeholder="Key narratives, proof points, differentiation"
             value={form.narratives}
             onChange={(event) => setForm({ ...form, narratives: event.target.value })}
           />
           <textarea
             className="min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-            placeholder="Risks, sensitivities, red flags"
+            placeholder="Do: preferred language and angles"
+            value={form.doLanguage}
+            onChange={(event) => setForm({ ...form, doLanguage: event.target.value })}
+          />
+          <textarea
+            className="min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+            placeholder="Don’t: language to avoid"
+            value={form.dontLanguage}
+            onChange={(event) => setForm({ ...form, dontLanguage: event.target.value })}
+          />
+          <textarea
+            className="min-h-[120px] rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+            placeholder="Client needs, priorities, sensitivities (optional)"
             value={form.risks}
             onChange={(event) => setForm({ ...form, risks: event.target.value })}
           />
         </form>
+        <p className="text-xs text-slate-500">
+          We use this profile to translate tracked updates into client-specific takeaways and actions.
+        </p>
         {status === "error" && (
           <p className="text-sm text-rose-600">Could not save yet. Check Supabase config.</p>
         )}
@@ -125,7 +175,13 @@ export default function ClientsPage() {
                   </span>
                 </div>
                 <div className="text-xs text-slate-500">
-                  <p>Risks: {client.risks ?? "None noted"}</p>
+                  <p>Goals: {extractTaggedSection(client.narratives, "GOALS") || "Not set yet"}</p>
+                  <p>Do: {extractTaggedSection(client.narratives, "DO") || "Not set yet"}</p>
+                  <p>Don’t: {extractTaggedSection(client.narratives, "DONT") || "Not set yet"}</p>
+                  <p>Needs: {client.risks ?? "None noted yet"}</p>
+                  {stripTaggedSections(client.narratives) && (
+                    <p>Notes: {stripTaggedSections(client.narratives)}</p>
+                  )}
                 </div>
               </div>
             ))}
