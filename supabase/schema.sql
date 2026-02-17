@@ -25,6 +25,8 @@ create table public.clients (
   positioning text,
   narratives text,
   risks text,
+  digest_enabled boolean not null default false,
+  digest_recipients text[] not null default '{}',
   created_at timestamp with time zone default now()
 );
 

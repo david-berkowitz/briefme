@@ -589,6 +589,7 @@ export default function WatchlistPage() {
                 <option>LinkedIn</option>
                 <option>Bluesky</option>
                 <option>Instagram</option>
+                <option>Threads</option>
                 <option>Other</option>
               </select>
             </div>
@@ -644,6 +645,17 @@ export default function WatchlistPage() {
           onChange={(event) => setBulkInput(event.target.value)}
         />
         {bulkStatus && <p className="text-xs text-slate-600">{bulkStatus}</p>}
+      </section>
+
+      <section className="card space-y-3">
+        <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Integrations</p>
+        <h3 className="text-lg font-semibold">Source connector status</h3>
+        <ul className="space-y-1 text-sm text-slate-600">
+          <li>Bluesky: Live now</li>
+          <li>LinkedIn: Email-based ingestion (compliance-first)</li>
+          <li>Instagram: Coming soon (official API path)</li>
+          <li>Threads: Coming soon (official API path)</li>
+        </ul>
       </section>
 
       <section className="space-y-4">
@@ -818,6 +830,7 @@ export default function WatchlistPage() {
                             <option>LinkedIn</option>
                             <option>Bluesky</option>
                             <option>Instagram</option>
+                            <option>Threads</option>
                             <option>Other</option>
                           </select>
                           <button

@@ -394,7 +394,7 @@ export const fetchClients = async () => {
   const db = supabase as any;
   const { data } = await db
     .from("clients")
-    .select("id,name,positioning,narratives,risks,created_at")
+    .select("id,name,positioning,narratives,risks,digest_enabled,digest_recipients,created_at")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
 
@@ -453,6 +453,8 @@ export const insertClient = async (payload: {
   positioning?: string;
   narratives?: string;
   risks?: string;
+  digest_enabled?: boolean;
+  digest_recipients?: string[];
 }) => {
   const supabase = getSupabase();
   if (!supabase) {
@@ -469,6 +471,26 @@ export const insertClient = async (payload: {
     workspace_id: workspaceId,
     ...payload
   });
+
+  return { error: error?.message ?? null };
+};
+
+export const updateClientDelivery = async (payload: {
+  id: string;
+  digest_enabled: boolean;
+  digest_recipients: string[];
+}) => {
+  const supabase = getSupabase();
+  if (!supabase) return { error: "Missing Supabase config." };
+
+  const db = supabase as any;
+  const { error } = await db
+    .from("clients")
+    .update({
+      digest_enabled: payload.digest_enabled,
+      digest_recipients: payload.digest_recipients
+    })
+    .eq("id", payload.id);
 
   return { error: error?.message ?? null };
 };

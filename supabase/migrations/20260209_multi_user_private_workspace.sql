@@ -58,6 +58,12 @@ create table if not exists public.briefing_attachments (
   created_at timestamp with time zone default now()
 );
 
+alter table public.clients
+  add column if not exists digest_enabled boolean not null default false;
+
+alter table public.clients
+  add column if not exists digest_recipients text[] not null default '{}';
+
 create table if not exists public.daily_run_logs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,

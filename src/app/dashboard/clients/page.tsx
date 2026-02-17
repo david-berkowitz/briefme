@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchClients, insertClient } from "@/lib/data";
+import { fetchClients, insertClient, updateClientDelivery } from "@/lib/data";
 
 type Client = {
   id: string;
@@ -9,6 +9,8 @@ type Client = {
   positioning: string | null;
   narratives: string | null;
   risks: string | null;
+  digest_enabled: boolean;
+  digest_recipients: string[] | null;
 };
 
 const extractTaggedSection = (text: string | null | undefined, tag: "GOALS" | "DO" | "DONT") => {
@@ -32,9 +34,13 @@ export default function ClientsPage() {
     narratives: "",
     doLanguage: "",
     dontLanguage: "",
-    risks: ""
+    risks: "",
+    digestRecipients: "",
+    digestEnabled: false
   });
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [deliveryDrafts, setDeliveryDrafts] = useState<Record<string, { enabled: boolean; recipientsText: string }>>({});
+  const [deliveryStatus, setDeliveryStatus] = useState<Record<string, string>>({});
 
   const canSave = useMemo(() => form.name.trim().length > 1, [form.name]);
 
@@ -48,6 +54,28 @@ export default function ClientsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    setDeliveryDrafts((prev) => {
+      const next = { ...prev };
+      for (const client of clients) {
+        if (!next[client.id]) {
+          next[client.id] = {
+            enabled: !!client.digest_enabled,
+            recipientsText: (client.digest_recipients ?? []).join(", ")
+          };
+        }
+      }
+      return next;
+    });
+  }, [clients]);
+
+  const parseRecipients = (value: string) =>
+    value
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+      .filter((email, index, array) => array.indexOf(email) === index);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -67,7 +95,9 @@ export default function ClientsPage() {
       name: form.name,
       positioning: form.positioning || undefined,
       narratives: narrativeParts.join("\n\n") || undefined,
-      risks: form.risks || undefined
+      risks: form.risks || undefined,
+      digest_enabled: form.digestEnabled,
+      digest_recipients: parseRecipients(form.digestRecipients)
     });
 
     setStatus(error ? "error" : "saved");
@@ -79,8 +109,29 @@ export default function ClientsPage() {
         narratives: "",
         doLanguage: "",
         dontLanguage: "",
-        risks: ""
+        risks: "",
+        digestRecipients: "",
+        digestEnabled: false
       });
+      await load();
+    }
+  };
+
+  const saveDelivery = async (client: Client) => {
+    const draft = deliveryDrafts[client.id];
+    if (!draft) return;
+
+    const recipients = parseRecipients(draft.recipientsText);
+    const { error } = await updateClientDelivery({
+      id: client.id,
+      digest_enabled: draft.enabled,
+      digest_recipients: recipients
+    });
+    setDeliveryStatus((prev) => ({
+      ...prev,
+      [client.id]: error ? `Could not save: ${error}` : "Saved."
+    }));
+    if (!error) {
       await load();
     }
   };
@@ -145,6 +196,20 @@ export default function ClientsPage() {
             value={form.risks}
             onChange={(event) => setForm({ ...form, risks: event.target.value })}
           />
+          <input
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+            placeholder="Digest recipients (comma separated emails)"
+            value={form.digestRecipients}
+            onChange={(event) => setForm({ ...form, digestRecipients: event.target.value })}
+          />
+          <label className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={form.digestEnabled}
+              onChange={(event) => setForm({ ...form, digestEnabled: event.target.checked })}
+            />
+            Send this client a daily digest email
+          </label>
         </form>
         <p className="text-xs text-slate-500">
           We use this profile to translate tracked updates into client-specific takeaways and actions.
@@ -179,8 +244,58 @@ export default function ClientsPage() {
                   <p>Do: {extractTaggedSection(client.narratives, "DO") || "Not set yet"}</p>
                   <p>Don’t: {extractTaggedSection(client.narratives, "DONT") || "Not set yet"}</p>
                   <p>Needs: {client.risks ?? "None noted yet"}</p>
+                  <p>Digest delivery: {client.digest_enabled ? "Enabled" : "Off"}</p>
+                  <p>
+                    Recipients: {(client.digest_recipients ?? []).length > 0 ? (client.digest_recipients ?? []).join(", ") : "None"}
+                  </p>
                   {stripTaggedSections(client.narratives) && (
                     <p>Notes: {stripTaggedSections(client.narratives)}</p>
+                  )}
+                </div>
+                <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Email delivery</p>
+                  <input
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                    placeholder="comma separated emails"
+                    value={deliveryDrafts[client.id]?.recipientsText ?? ""}
+                    onChange={(event) =>
+                      setDeliveryDrafts((prev) => ({
+                        ...prev,
+                        [client.id]: {
+                          enabled: prev[client.id]?.enabled ?? client.digest_enabled,
+                          recipientsText: event.target.value
+                        }
+                      }))
+                    }
+                  />
+                  <label className="flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={deliveryDrafts[client.id]?.enabled ?? client.digest_enabled}
+                      onChange={(event) =>
+                        setDeliveryDrafts((prev) => ({
+                          ...prev,
+                          [client.id]: {
+                            enabled: event.target.checked,
+                            recipientsText:
+                              prev[client.id]?.recipientsText ?? (client.digest_recipients ?? []).join(", ")
+                          }
+                        }))
+                      }
+                    />
+                    Send daily digest for this client
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void saveDelivery(client)}
+                    className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Save email settings
+                  </button>
+                  {deliveryStatus[client.id] && (
+                    <p className={`text-xs ${deliveryStatus[client.id] === "Saved." ? "text-emerald-700" : "text-rose-600"}`}>
+                      {deliveryStatus[client.id]}
+                    </p>
                   )}
                 </div>
               </div>

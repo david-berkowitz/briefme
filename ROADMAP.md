@@ -16,6 +16,7 @@
 - Bulk import for watchlists (paste many links/handles in one step).
 - Run Health page with success/failure history.
 - Daily owner signup summary email.
+- Per-client digest email delivery controls (recipient list + on/off).
 
 ## Near-term improvements (2-4 weeks)
 - Gmail ingestion for LinkedIn notification emails.
@@ -28,6 +29,7 @@
 - Richer email format with per-client sections and top linked sources.
 - In-app run history page (with downloadable error logs).
 - Beta owner daily signup summary email (new-user alert automation).
+- SMTP bounce/complaint tracking and auto-disable bad recipient addresses.
 
 ## Product value layer (next phase)
 - Automatic daily brief generation by client.

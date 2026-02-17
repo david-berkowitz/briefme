@@ -10,6 +10,16 @@ type BriefHighlight = {
   score: number;
 };
 
+type PreparedClientBrief = {
+  clientId: string;
+  clientName: string;
+  digestEnabled: boolean;
+  digestRecipients: string[];
+  workspace_id: string;
+  title: string;
+  summary: string;
+};
+
 const STOPWORDS = new Set([
   "the",
   "and",
@@ -205,6 +215,56 @@ const sendDigestEmail = async (
   return { sent: true, reason: null };
 };
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const sendClientDigestEmail = async (
+  recipients: string[],
+  clientName: string,
+  workspaceName: string,
+  summary: string
+) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.ALERT_FROM_EMAIL;
+
+  if (!apiKey || !fromEmail) {
+    return { sent: false, reason: "Email provider not configured." };
+  }
+
+  const to = recipients.filter((email) => isValidEmail(email.trim().toLowerCase()));
+  if (to.length === 0) {
+    return { sent: false, reason: "No valid recipient emails." };
+  }
+
+  const cleaned = escapeHtml(summaryPreview(summary)).replace(/\n/g, "<br />");
+  const html = `
+    <h2>${escapeHtml(clientName)} · Daily Brief</h2>
+    <p>Workspace: ${escapeHtml(workspaceName)}</p>
+    <div style="line-height:1.45;">${cleaned}</div>
+    <p><a href="${process.env.NEXT_PUBLIC_SITE_URL ?? "https://briefme.info"}/dashboard/digest">Open full dashboard digest</a></p>
+  `;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to,
+      subject: `${clientName} · Daily Brief`,
+      html
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "unknown email error");
+    return { sent: false, reason: text };
+  }
+
+  return { sent: true, reason: null };
+};
+
 export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: string; owner_email: string }) => {
   let postsInserted = 0;
   let briefsCreated = 0;
@@ -275,7 +335,7 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
   const [{ data: clients }, { data: posts }, { data: links }] = await Promise.all([
     db
       .from("clients")
-      .select("id,name,positioning,narratives,risks")
+      .select("id,name,positioning,narratives,risks,digest_enabled,digest_recipients")
       .eq("workspace_id", workspace.id)
       .order("created_at", { ascending: false }),
     db
@@ -299,7 +359,7 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
   }
 
   if (clientRows.length > 0) {
-    const inserts = clientRows.map((client: any) => {
+    const preparedClientBriefs: PreparedClientBrief[] = clientRows.map((client: any) => {
       const contextText = [
         client.positioning,
         stripTaggedSections(client.narratives),
@@ -348,11 +408,23 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
       const highlights = (scored.length ? scored : fallback).slice(0, 3);
       const summary = composeBriefSummary(client, highlights);
       return {
+        clientId: client.id as string,
+        clientName: client.name as string,
+        digestEnabled: !!client.digest_enabled,
+        digestRecipients: Array.isArray(client.digest_recipients)
+          ? (client.digest_recipients as string[])
+          : [],
         workspace_id: workspace.id,
         title: `${client.name} brief · ${new Date().toLocaleDateString()}`,
         summary
       };
     });
+
+    const inserts = preparedClientBriefs.map((item) => ({
+      workspace_id: item.workspace_id,
+      title: item.title,
+      summary: item.summary
+    }));
 
     const { error } = await db.from("digests").insert(inserts);
     if (!error) briefsCreated += inserts.length;
@@ -364,7 +436,18 @@ export const runWorkspaceDaily = async (db: any, workspace: { id: string; name: 
 
     if (emailItems.length > 0) {
       const mail = await sendDigestEmail(workspace.owner_email, workspace.name, emailItems);
-      if (mail.sent) emailsSent = 1;
+      if (mail.sent) emailsSent += 1;
+    }
+
+    for (const brief of preparedClientBriefs) {
+      if (!brief.digestEnabled || brief.digestRecipients.length === 0) continue;
+      const sent = await sendClientDigestEmail(
+        brief.digestRecipients,
+        brief.clientName,
+        workspace.name,
+        brief.summary
+      );
+      if (sent.sent) emailsSent += 1;
     }
   }
 
