@@ -52,7 +52,7 @@ export default function AuthPage() {
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <img
-              src="/briefme-logo-wide.png"
+              src="/briefme-logo-wide-transparent.png"
               alt="BriefMe"
               className="h-20 w-auto object-contain md:h-24"
             />

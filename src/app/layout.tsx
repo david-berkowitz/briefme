@@ -41,9 +41,9 @@ export const metadata: Metadata = {
       "Track key voices across LinkedIn and Bluesky. Get daily alerts with client-ready takeaways."
   },
   icons: {
-    icon: [{ url: "/briefme-icon.png", type: "image/png" }],
-    shortcut: ["/briefme-icon.png"],
-    apple: [{ url: "/briefme-icon.png" }]
+    icon: [{ url: "/briefme-icon-transparent.png", type: "image/png" }],
+    shortcut: ["/briefme-icon-transparent.png"],
+    apple: [{ url: "/briefme-icon-transparent.png" }]
   }
 };
 

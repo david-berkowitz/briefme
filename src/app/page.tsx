@@ -6,7 +6,7 @@ export default function Home() {
           <nav className="brand-nav flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
-                src="/briefme-logo-wide.png"
+                src="/briefme-logo-wide-transparent.png"
                 alt="BriefMe"
                 className="h-12 w-auto object-contain md:h-14"
               />
@@ -231,7 +231,7 @@ export default function Home() {
           <div>
             <div className="flex items-center gap-3">
               <img
-                src="/briefme-logo-wide.png"
+                src="/briefme-logo-wide-transparent.png"
                 alt="BriefMe"
                 className="h-10 w-auto object-contain md:h-12"
               />
