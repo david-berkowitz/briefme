@@ -35,6 +35,16 @@ export type DailyRunStatus = {
   error_message: string | null;
 };
 
+export type DailyRunHistoryItem = {
+  started_at: string;
+  completed_at: string | null;
+  status: "success" | "failed";
+  posts_inserted: number;
+  briefs_created: number;
+  emails_sent: number;
+  error_message: string | null;
+};
+
 const STOPWORDS = new Set([
   "the",
   "and",
@@ -529,6 +539,26 @@ export const fetchDailyRunStatus = async (): Promise<DailyRunStatus | null> => {
 
   if (!data) return null;
   return data as DailyRunStatus;
+};
+
+export const fetchDailyRunHistory = async (
+  limit = 20
+): Promise<DailyRunHistoryItem[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const { workspaceId, error } = await resolveWorkspace();
+  if (!workspaceId || error) return [];
+
+  const db = supabase as any;
+  const { data } = await db
+    .from("daily_run_logs")
+    .select("started_at,completed_at,status,posts_inserted,briefs_created,emails_sent,error_message")
+    .eq("workspace_id", workspaceId)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []) as DailyRunHistoryItem[];
 };
 
 export const fetchRecentPosts = async () => {

@@ -13,6 +13,9 @@
 - Optional client-to-voice linking for tighter relevance.
 - Attachment uploads on digest items (5 MB per file).
 - One-click "Run full daily brief now" (ingest + brief + email) from dashboard.
+- Bulk import for watchlists (paste many links/handles in one step).
+- Run Health page with success/failure history.
+- Daily owner signup summary email.
 
 ## Near-term improvements (2-4 weeks)
 - Gmail ingestion for LinkedIn notification emails.

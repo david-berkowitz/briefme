@@ -83,6 +83,19 @@ const getSourceLabel = (sourceUrl: string) => {
   }
 };
 
+const cleanUrl = (value: string) => value.replace(/[),.;]+$/, "");
+
+const deriveNameFromSource = (sourceUrl: string) => {
+  try {
+    const url = new URL(sourceUrl);
+    const path = url.pathname.split("/").filter(Boolean);
+    const last = path[path.length - 1] ?? "Tracked voice";
+    return last.replace(/[-_.]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  } catch {
+    return "Tracked voice";
+  }
+};
+
 export default function WatchlistPage() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +117,9 @@ export default function WatchlistPage() {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [voiceClientLinks, setVoiceClientLinks] = useState<Record<string, string[]>>({});
   const [voiceClientDrafts, setVoiceClientDrafts] = useState<Record<string, string[]>>({});
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
 
   const canSave = useMemo(() => {
     const hasName = form.name.trim().length > 1;
@@ -139,6 +155,115 @@ export default function WatchlistPage() {
       return "LinkedIn";
     }
     return fallback;
+  };
+
+  const parseBulkLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+
+    const urlMatch = trimmed.match(/https?:\/\/\S+/i);
+    let sourceUrl = urlMatch ? cleanUrl(urlMatch[0]) : "";
+    let name = "";
+
+    if (sourceUrl) {
+      name = trimmed
+        .replace(urlMatch?.[0] ?? "", "")
+        .replace(/^[\s\-–—|,:]+/, "")
+        .trim();
+    } else {
+      const token = trimmed.split(/\s+/)[0] ?? "";
+      if (token.includes(".bsky.social") || token.startsWith("@")) {
+        const handle = token.replace(/^@/, "");
+        sourceUrl = `https://bsky.app/profile/${handle}`;
+        name = trimmed.replace(token, "").replace(/^[\s\-–—|,:]+/, "").trim();
+      }
+    }
+
+    if (!sourceUrl) return null;
+    if (!name) name = deriveNameFromSource(sourceUrl);
+
+    const source = detectSource(sourceUrl, "Other");
+    const handle = source === "Bluesky" ? normalizeBlueskyHandle(sourceUrl) : null;
+
+    return {
+      name,
+      source,
+      source_url: sourceUrl,
+      handle
+    };
+  };
+
+  const handleBulkImport = async () => {
+    if (bulkImporting) return;
+
+    const lines = bulkInput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      setBulkStatus("Paste at least one line first.");
+      return;
+    }
+
+    const parsed = lines.map(parseBulkLine).filter(Boolean) as Array<{
+      name: string;
+      source: string;
+      source_url: string;
+      handle: string | null;
+    }>;
+
+    if (parsed.length === 0) {
+      setBulkStatus("Could not detect valid profiles. Use URL lines or @handle.bsky.social lines.");
+      return;
+    }
+
+    const remaining = Math.max(usage.limit - usage.voices, 0);
+    if (remaining <= 0) {
+      setBulkStatus(`You reached the ${usage.limit} person beta limit.`);
+      return;
+    }
+
+    const toImport = parsed.slice(0, remaining);
+    setBulkImporting(true);
+    setBulkStatus("Importing...");
+
+    let success = 0;
+    let failed = 0;
+    let lastError = "";
+
+    for (const item of toImport) {
+      const { error } = await insertWatchlistPerson({
+        name: item.name,
+        cadence: "daily",
+        tags: [],
+        sources: [
+          {
+            source: item.source,
+            source_url: item.source_url,
+            handle: item.handle
+          }
+        ]
+      });
+      if (error) {
+        failed += 1;
+        lastError = error;
+      } else {
+        success += 1;
+      }
+    }
+
+    await load();
+    setBulkImporting(false);
+    setBulkInput("");
+
+    const skippedForLimit = parsed.length - toImport.length;
+    const statusParts = [
+      `Imported ${success}`,
+      failed > 0 ? `Failed ${failed}` : "",
+      skippedForLimit > 0 ? `Skipped ${skippedForLimit} (plan limit)` : ""
+    ].filter(Boolean);
+    setBulkStatus(`${statusParts.join(" · ")}${lastError ? ` · Last error: ${lastError}` : ""}`);
   };
 
   const normalizeBlueskyHandle = (value: string) => {
@@ -492,6 +617,33 @@ export default function WatchlistPage() {
             .
           </p>
         )}
+      </section>
+
+      <section className="card space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Bulk import</p>
+            <h3 className="text-lg font-semibold">Paste many profiles at once</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              One per line. Use either a URL, or a format like: Name - URL
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleBulkImport()}
+            disabled={bulkImporting || usage.voices >= usage.limit}
+            className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold"
+          >
+            {bulkImporting ? "Importing..." : "Import list"}
+          </button>
+        </div>
+        <textarea
+          className="min-h-[140px] w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          placeholder={"https://bsky.app/profile/caseynewton.bsky.social\nScott Monty - https://www.linkedin.com/in/scottmonty\n@jowyang.bsky.social"}
+          value={bulkInput}
+          onChange={(event) => setBulkInput(event.target.value)}
+        />
+        {bulkStatus && <p className="text-xs text-slate-600">{bulkStatus}</p>}
       </section>
 
       <section className="space-y-4">

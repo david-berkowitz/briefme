@@ -74,7 +74,8 @@ export default function DashboardLayout({
               { href: "/dashboard", label: "Overview" },
               { href: "/dashboard/watchlist", label: "Watchlist" },
               { href: "/dashboard/clients", label: "Clients" },
-              { href: "/dashboard/digest", label: "Daily Digest" }
+              { href: "/dashboard/digest", label: "Daily Digest" },
+              { href: "/dashboard/health", label: "Run Health" }
             ].map((item) => (
               <Link
                 key={item.href}
