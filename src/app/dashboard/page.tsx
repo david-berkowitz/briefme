@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DailyRunStatus, fetchDashboardStats, fetchDailyRunStatus, fetchRecentPosts, runBlueskyIngestForWorkspace } from "@/lib/data";
+import {
+  DailyRunStatus,
+  fetchDashboardStats,
+  fetchDailyRunStatus,
+  fetchRecentPosts,
+  runBlueskyIngestForWorkspace,
+  runDailyBriefNow
+} from "@/lib/data";
 
 type Stats = {
   voices: number;
@@ -33,6 +40,8 @@ export default function DashboardPage() {
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [ingesting, setIngesting] = useState(false);
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
+  const [runningDaily, setRunningDaily] = useState(false);
+  const [dailyMessage, setDailyMessage] = useState<string | null>(null);
   const [dailyStatus, setDailyStatus] = useState<DailyRunStatus | null>(null);
 
   const loadStats = async () => {
@@ -75,6 +84,25 @@ export default function DashboardPage() {
     await loadStats();
     await loadDailyStatus();
     setIngesting(false);
+  };
+
+  const runDailyNow = async () => {
+    setRunningDaily(true);
+    setDailyMessage(null);
+
+    const result = await runDailyBriefNow();
+    if (result.error) {
+      setDailyMessage(result.error);
+    } else {
+      setDailyMessage(
+        `Daily run complete. ${result.postsInserted} posts, ${result.briefsCreated} briefs, ${result.emailsSent} emails sent.`
+      );
+    }
+
+    await loadPosts();
+    await loadStats();
+    await loadDailyStatus();
+    setRunningDaily(false);
   };
 
   const completedSteps = [
@@ -223,6 +251,19 @@ export default function DashboardPage() {
               )}
               <p className="mt-2">Next scheduled run: {nextRunTime}</p>
             </div>
+            <button
+              type="button"
+              onClick={runDailyNow}
+              disabled={runningDaily}
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold"
+            >
+              {runningDaily ? "Running daily brief..." : "Run full daily brief now"}
+            </button>
+            {dailyMessage && (
+              <p className={`text-xs ${dailyMessage.includes("complete") ? "text-emerald-700" : "text-rose-600"}`}>
+                {dailyMessage}
+              </p>
+            )}
             <div className={`rounded-xl border p-3 text-xs ${freshPostCount === 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
               <p className="font-semibold">Freshness check (last 24h)</p>
               <p>{freshPostCount} recent tracked posts found.</p>

@@ -10,6 +10,9 @@
 - Per-user private workspace auto-creation on first login.
 - Client-specific brief generation from recent tracked posts.
 - New-user onboarding checklist in dashboard.
+- Optional client-to-voice linking for tighter relevance.
+- Attachment uploads on digest items (5 MB per file).
+- One-click "Run full daily brief now" (ingest + brief + email) from dashboard.
 
 ## Near-term improvements (2-4 weeks)
 - Gmail ingestion for LinkedIn notification emails.
@@ -17,10 +20,11 @@
 - Better duplicate handling and source quality checks.
 - Bulk import (paste many links/handles at once).
 - Client-level filters and saved views.
-- Inline edit/delete for voice profiles (name, tags, sources).
 - Delivery preferences (daily send time + timezone picker).
 - Daily run analytics card (success rate and failure reasons).
-- One-click retry for failed automated runs.
+- Richer email format with per-client sections and top linked sources.
+- In-app run history page (with downloadable error logs).
+- Beta owner daily signup summary email (new-user alert automation).
 
 ## Product value layer (next phase)
 - Automatic daily brief generation by client.

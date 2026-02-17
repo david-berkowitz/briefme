@@ -128,7 +128,7 @@ export default function DigestPage() {
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Client briefing</p>
             <h2 className="text-xl font-semibold">Generate customized briefs</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Uses each client&apos;s positioning, narratives, and risks to rank recent posts and suggest takeaways.
+              Uses each client&apos;s positioning, narratives, and needs to rank recent posts and suggest takeaways.
             </p>
           </div>
           <button

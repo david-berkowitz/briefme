@@ -651,6 +651,72 @@ export const runBlueskyIngestForWorkspace = async () => {
   }
 };
 
+export const runDailyBriefNow = async () => {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return {
+      postsInserted: 0,
+      briefsCreated: 0,
+      emailsSent: 0,
+      error: "Missing Supabase config."
+    };
+  }
+
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  const accessToken = session?.access_token;
+  if (!accessToken) {
+    return {
+      postsInserted: 0,
+      briefsCreated: 0,
+      emailsSent: 0,
+      error: "Please log in again."
+    };
+  }
+
+  try {
+    const response = await fetch("/api/cron/workspace-now", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    const payload = (await response.json()) as {
+      postsInserted?: number;
+      briefsCreated?: number;
+      emailsSent?: number;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      return {
+        postsInserted: 0,
+        briefsCreated: 0,
+        emailsSent: 0,
+        error: payload.error ?? "Daily run failed."
+      };
+    }
+
+    return {
+      postsInserted: Number(payload.postsInserted ?? 0),
+      briefsCreated: Number(payload.briefsCreated ?? 0),
+      emailsSent: Number(payload.emailsSent ?? 0),
+      error: null
+    };
+  } catch {
+    return {
+      postsInserted: 0,
+      briefsCreated: 0,
+      emailsSent: 0,
+      error: "Daily run failed."
+    };
+  }
+};
+
 const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
   const top = highlights.slice(0, 3);
 
@@ -693,7 +759,7 @@ const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
     "",
     "Why it matters for this client:",
     strategyFocus
-      ? `- Priority context: ${strategyFocus}`
+      ? `- Priority context (positioning + client needs): ${strategyFocus}`
       : "- Add client priorities in Clients to improve matching and recommendations.",
     "- This signal can shape messaging, positioning, or response timing today.",
     "",

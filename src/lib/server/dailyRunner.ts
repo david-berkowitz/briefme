@@ -127,7 +127,7 @@ const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
     "",
     "Why it matters for this client:",
     strategyFocus
-      ? `- Priority context: ${strategyFocus}`
+      ? `- Priority context (positioning + client needs): ${strategyFocus}`
       : "- Add client priorities in Clients to improve matching and recommendations.",
     "- This signal can shape messaging, positioning, or response timing today.",
     "",
@@ -136,6 +136,20 @@ const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
     doGuidance ? `- Use this guidance: ${doGuidance}` : "- Anchor the response in one clear proof point for this client.",
     dontGuidance ? `- Avoid: ${dontGuidance}` : ""
   ].join("\n");
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const summaryPreview = (summary: string) => {
+  const cleaned = summary.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "No summary text yet. Open dashboard digest for full details.";
+  return cleaned.length > 420 ? `${cleaned.slice(0, 420)}...` : cleaned;
 };
 
 const sendDigestEmail = async (
@@ -152,10 +166,10 @@ const sendDigestEmail = async (
 
   const summaryHtml = briefItems
     .map((item) => {
-      const cleaned = item.summary.replace(/\n/g, "<br />");
+      const cleaned = escapeHtml(summaryPreview(item.summary)).replace(/\n/g, "<br />");
       return `
         <li style="margin-bottom:18px;">
-          <div style="font-weight:700;margin-bottom:6px;">${item.title}</div>
+          <div style="font-weight:700;margin-bottom:6px;">${escapeHtml(item.title)}</div>
           <div style="line-height:1.45;">${cleaned}</div>
         </li>
       `;
