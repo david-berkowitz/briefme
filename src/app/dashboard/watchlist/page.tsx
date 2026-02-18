@@ -656,6 +656,10 @@ export default function WatchlistPage() {
           <li>Instagram: Coming soon (official API path)</li>
           <li>Threads: Coming soon (official API path)</li>
         </ul>
+        <p className="text-xs text-slate-500">
+          LinkedIn MVP webhook: send email subject + body to <code>/api/ingest/linkedin</code> with header{" "}
+          <code>x-ingest-secret</code>. The parser will try to extract profile URL, post URL, and post text.
+        </p>
       </section>
 
       <section className="space-y-4">

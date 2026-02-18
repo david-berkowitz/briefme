@@ -17,9 +17,12 @@
 - Run Health page with success/failure history.
 - Daily owner signup summary email.
 - Per-client digest email delivery controls (recipient list + on/off).
+- Per-client “send test digest email” action.
+- Recipient validation guardrails (invalid/typo warnings).
 
 ## Near-term improvements (2-4 weeks)
 - Gmail ingestion for LinkedIn notification emails.
+- LinkedIn email parser endpoint for subject/body webhook ingestion (MVP).
 - Setup checklist for first-time users.
 - Better duplicate handling and source quality checks.
 - Bulk import (paste many links/handles at once).

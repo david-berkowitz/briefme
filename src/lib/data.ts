@@ -769,6 +769,42 @@ export const runDailyBriefNow = async () => {
   }
 };
 
+export const sendClientTestEmail = async (clientId: string) => {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { sent: 0, error: "Missing Supabase config." };
+  }
+
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  const accessToken = session?.access_token;
+  if (!accessToken) {
+    return { sent: 0, error: "Please log in again." };
+  }
+
+  try {
+    const response = await fetch("/api/clients/test-email", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ clientId })
+    });
+
+    const payload = (await response.json()) as { sent?: number; error?: string };
+    if (!response.ok) {
+      return { sent: 0, error: payload.error ?? "Could not send test email." };
+    }
+
+    return { sent: Number(payload.sent ?? 0), error: null };
+  } catch {
+    return { sent: 0, error: "Could not send test email." };
+  }
+};
+
 const composeBriefSummary = (client: any, highlights: BriefHighlight[]) => {
   const top = highlights.slice(0, 3);
 

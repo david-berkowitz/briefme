@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchClients, insertClient, updateClientDelivery } from "@/lib/data";
+import { fetchClients, insertClient, sendClientTestEmail, updateClientDelivery } from "@/lib/data";
 
 type Client = {
   id: string;
@@ -24,6 +24,32 @@ const stripTaggedSections = (text: string | null | undefined) => {
   return text.replace(/\[(GOALS|DO|DONT)\][\s\S]*?\[\/\1\]/gi, "").trim();
 };
 
+const isLikelyEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const typoDomains = new Set([
+  "gmal.com",
+  "gnail.com",
+  "gmail.co",
+  "hotnail.com",
+  "outlok.com",
+  "yaho.com"
+]);
+
+const parseRecipients = (value: string) =>
+  value
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((email, index, array) => array.indexOf(email) === index);
+
+const analyzeRecipients = (value: string) => {
+  const all = parseRecipients(value);
+  const valid = all.filter((email) => isLikelyEmail(email));
+  const invalid = all.filter((email) => !isLikelyEmail(email));
+  const suspicious = valid.filter((email) => typoDomains.has(email.split("@")[1] ?? ""));
+  return { all, valid, invalid, suspicious };
+};
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +67,14 @@ export default function ClientsPage() {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [deliveryDrafts, setDeliveryDrafts] = useState<Record<string, { enabled: boolean; recipientsText: string }>>({});
   const [deliveryStatus, setDeliveryStatus] = useState<Record<string, string>>({});
+  const [testStatus, setTestStatus] = useState<Record<string, string>>({});
 
-  const canSave = useMemo(() => form.name.trim().length > 1, [form.name]);
+  const formRecipientCheck = useMemo(() => analyzeRecipients(form.digestRecipients), [form.digestRecipients]);
+  const canSave = useMemo(() => {
+    if (form.name.trim().length <= 1) return false;
+    if (!form.digestEnabled) return true;
+    return formRecipientCheck.valid.length > 0 && formRecipientCheck.invalid.length === 0;
+  }, [form.name, form.digestEnabled, formRecipientCheck.valid.length, formRecipientCheck.invalid.length]);
 
   const load = async () => {
     setLoading(true);
@@ -69,13 +101,6 @@ export default function ClientsPage() {
       return next;
     });
   }, [clients]);
-
-  const parseRecipients = (value: string) =>
-    value
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-      .filter((email, index, array) => array.indexOf(email) === index);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -121,7 +146,23 @@ export default function ClientsPage() {
     const draft = deliveryDrafts[client.id];
     if (!draft) return;
 
-    const recipients = parseRecipients(draft.recipientsText);
+    const check = analyzeRecipients(draft.recipientsText);
+    if (draft.enabled && check.valid.length === 0) {
+      setDeliveryStatus((prev) => ({
+        ...prev,
+        [client.id]: "Add at least one valid email before enabling delivery."
+      }));
+      return;
+    }
+    if (check.invalid.length > 0) {
+      setDeliveryStatus((prev) => ({
+        ...prev,
+        [client.id]: `Fix invalid emails first: ${check.invalid.join(", ")}`
+      }));
+      return;
+    }
+
+    const recipients = check.valid;
     const { error } = await updateClientDelivery({
       id: client.id,
       digest_enabled: draft.enabled,
@@ -134,6 +175,15 @@ export default function ClientsPage() {
     if (!error) {
       await load();
     }
+  };
+
+  const sendTest = async (client: Client) => {
+    setTestStatus((prev) => ({ ...prev, [client.id]: "Sending..." }));
+    const result = await sendClientTestEmail(client.id);
+    setTestStatus((prev) => ({
+      ...prev,
+      [client.id]: result.error ? `Could not send: ${result.error}` : `Sent test email to ${result.sent} recipient(s).`
+    }));
   };
 
   return (
@@ -214,6 +264,17 @@ export default function ClientsPage() {
         <p className="text-xs text-slate-500">
           We use this profile to translate tracked updates into client-specific takeaways and actions.
         </p>
+        {form.digestEnabled && formRecipientCheck.valid.length === 0 && (
+          <p className="text-xs text-amber-700">Add at least one valid email to enable client digest delivery.</p>
+        )}
+        {formRecipientCheck.invalid.length > 0 && (
+          <p className="text-xs text-rose-600">Invalid emails: {formRecipientCheck.invalid.join(", ")}</p>
+        )}
+        {formRecipientCheck.suspicious.length > 0 && (
+          <p className="text-xs text-amber-700">
+            Possible typos to check: {formRecipientCheck.suspicious.join(", ")}
+          </p>
+        )}
         {status === "error" && (
           <p className="text-sm text-rose-600">Could not save yet. Check Supabase config.</p>
         )}
@@ -292,9 +353,37 @@ export default function ClientsPage() {
                   >
                     Save email settings
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void sendTest(client)}
+                    className="rounded-full border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700"
+                  >
+                    Send test digest email
+                  </button>
+                  {(() => {
+                    const draft = deliveryDrafts[client.id];
+                    if (!draft) return null;
+                    const check = analyzeRecipients(draft.recipientsText);
+                    if (check.invalid.length === 0 && check.suspicious.length === 0) return null;
+                    return (
+                      <div className="space-y-1">
+                        {check.invalid.length > 0 && (
+                          <p className="text-xs text-rose-600">Invalid: {check.invalid.join(", ")}</p>
+                        )}
+                        {check.suspicious.length > 0 && (
+                          <p className="text-xs text-amber-700">Possible typo: {check.suspicious.join(", ")}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {deliveryStatus[client.id] && (
                     <p className={`text-xs ${deliveryStatus[client.id] === "Saved." ? "text-emerald-700" : "text-rose-600"}`}>
                       {deliveryStatus[client.id]}
+                    </p>
+                  )}
+                  {testStatus[client.id] && (
+                    <p className={`text-xs ${testStatus[client.id].startsWith("Sent") ? "text-emerald-700" : testStatus[client.id] === "Sending..." ? "text-slate-600" : "text-rose-600"}`}>
+                      {testStatus[client.id]}
                     </p>
                   )}
                 </div>
